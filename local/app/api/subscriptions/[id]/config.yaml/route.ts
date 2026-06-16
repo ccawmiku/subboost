@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
   return new Response(yaml, {
     headers: {
       "Content-Type": "text/yaml; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="subboost-config.yaml"',
+      "Content-Disposition": 'attachment; filename="subboost-config"',
       "Cache-Control": "no-store",
     },
   });
