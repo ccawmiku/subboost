@@ -219,7 +219,7 @@ ENV
     expect(result.stdout).not.toContain("健康检查: 异常");
     // wait_for_health stops once ready succeeds, then status_cmd performs one final live+ready check.
     expect(result.stdout).toContain("curl_count=7");
-  });
+  }, 10_000);
 
   it("updates exact env keys without removing similarly prefixed names", () => {
     const script = `

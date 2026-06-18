@@ -1,31 +1,29 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import { buildGeneratedRuleEntries, resolveAppliedRuleOrder } from "@subboost/core/generator/rules";
-import { initialState } from "../definitions";
+import { initialState, type ConfigState } from "../definitions";
+import type { SetAndGenerateConfig, StoreState } from "../store-types";
 import { createProxyGroupActions } from "./proxy-group-actions";
 
-type HarnessState = typeof initialState & {
-  enabledProxyGroups?: string[];
-  hiddenProxyGroups?: string[];
-  proxyGroupOrder?: string[];
-};
+type HarnessState = ConfigState & Record<string, unknown>;
 
-function createHarness(overrides: Partial<HarnessState> = {}) {
+function createHarness(overrides: Record<string, unknown> = {}) {
   let state: HarnessState = {
     ...structuredClone(initialState),
     ...overrides,
   };
 
-  const applyPatch = (patch?: Partial<HarnessState> | HarnessState) => {
+  const applyPatch = (patch?: Partial<StoreState> | StoreState | void) => {
     if (!patch || patch === state) return;
-    state = { ...state, ...patch };
+    state = { ...state, ...patch } as HarnessState;
   };
 
-  const setAndGenerateConfig = (updater: (current: HarnessState) => Partial<HarnessState> | void) => {
-    applyPatch(updater(state));
+  const setAndGenerateConfig: SetAndGenerateConfig = (updater) => {
+    // createProxyGroupActions only reads ConfigState fields; actions are outside this test harness.
+    applyPatch(updater(state as unknown as StoreState));
   };
 
-  const actions = createProxyGroupActions(() => undefined, () => state, setAndGenerateConfig);
+  const actions = createProxyGroupActions(() => undefined, () => state as unknown as StoreState, setAndGenerateConfig);
   return { actions, getState: () => state };
 }
 
