@@ -13,13 +13,13 @@ import {
   getEffectiveModuleRuleItems,
   getExcludedModuleRuleIds,
   isModuleRuleMovedFrom,
-  type ModuleRuleExclusions as HiddenPresetRuleIds,
+  type HiddenPresetRuleIds,
 } from "@subboost/core/generator/module-rules";
 import { EXPERIMENTAL_CN_RULE } from "@subboost/core/generator/rules";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
 import { cn } from "@subboost/ui/lib/utils";
 import { useProductApiAdapter } from "@subboost/ui/product/api-adapter";
-import type { CustomProxyGroup, ModuleRuleOverride } from "@subboost/ui/store/config-store";
+import type { CustomProxyGroup, RuleSetDraft } from "@subboost/ui/store/config-store";
 import type {
   CustomRuleListItem,
   ProxyGroupRuleTarget,
@@ -37,9 +37,6 @@ type MoveTarget = { kind: "module" | "custom"; id: string };
 type ActiveRuleRow = EffectiveModuleRule & { state: "active" };
 type InactiveRuleRow = ProxyGroupRule & { source: "preset"; state: "removed" | "moved" };
 type RuleRow = ActiveRuleRow | InactiveRuleRow;
-type CustomProxyGroupRuleView = CustomProxyGroup & {
-  rules?: Array<{ id?: unknown }>;
-};
 type CnCandidateRule = {
   id: string;
   name: string;
@@ -105,17 +102,17 @@ export function ProxyGroupsModuleRulesPanel({
   module: ProxyGroupModule;
   enabledProxyGroups: string[];
   hiddenProxyGroups: string[];
-  ruleSetsByTarget: Record<string, ModuleRuleOverride[]>;
+  ruleSetsByTarget: Record<string, RuleSetDraft[]>;
   hiddenPresetRuleIds: HiddenPresetRuleIds;
-  customProxyGroups: CustomProxyGroupRuleView[];
+  customProxyGroups: CustomProxyGroup[];
   manualRules: CustomRuleListItem[];
   manualRuleTargets: ProxyGroupRuleTarget[];
   proxyGroupNameOverrides: Record<string, string>;
   moduleRuleEditWarningAccepted: boolean;
   acceptModuleRuleEditWarning: () => void;
-  onAddRules: (rules: ModuleRuleOverride[]) => void;
-  onAddRulesToModule: (moduleId: string, rules: ModuleRuleOverride[]) => void;
-  onAddRuleToCustomGroup: (groupId: string, rule: ModuleRuleOverride) => void;
+  onAddRules: (rules: RuleSetDraft[]) => void;
+  onAddRulesToModule: (moduleId: string, rules: RuleSetDraft[]) => void;
+  onAddRuleToCustomGroup: (groupId: string, rule: RuleSetDraft) => void;
   onRemoveRule: (ruleId: string) => void;
   onMoveRule: (ruleId: string, target: MoveTarget) => void;
   onMoveManualRule: (ruleId: string, targetName: string) => void;
@@ -160,11 +157,11 @@ export function ProxyGroupsModuleRulesPanel({
       .map((rule) => ({
         ...rule,
         source: "preset" as const,
-        state: isModuleRuleMovedFrom(module.id, rule.id, ruleSetsByTarget, customProxyGroups)
+        state: isModuleRuleMovedFrom(module.id, rule.id, ruleSetsByTarget)
           ? "moved" as const
           : "removed" as const,
       }));
-  }, [customProxyGroups, module, hiddenPresetRuleIds, ruleSetsByTarget]);
+  }, [module, hiddenPresetRuleIds, ruleSetsByTarget]);
 
   const rules = React.useMemo<RuleRow[]>(
     () => [
@@ -268,7 +265,7 @@ export function ProxyGroupsModuleRulesPanel({
   );
   const moveExperimentalCnRule = React.useCallback(
     (target: MoveTarget) => {
-      const rule: ModuleRuleOverride = {
+      const rule: RuleSetDraft = {
         id: EXPERIMENTAL_CN_RULE.id,
         name: EXPERIMENTAL_CN_RULE.name,
         behavior: EXPERIMENTAL_CN_RULE.behavior,

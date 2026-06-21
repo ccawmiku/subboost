@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGenerateOptionsFromConfig,
-  extractModuleRuleExclusions,
-  extractModuleRuleOverrides,
   getEffectiveTestOptions,
 } from "./config-utils";
 import type { ParsedNode } from "@subboost/core/types/node";
@@ -21,37 +19,6 @@ function node(patch: Partial<ParsedNode> = {}): ParsedNode {
 }
 
 describe("subscription config utils", () => {
-  it("extracts valid module rule overrides and exclusions only", () => {
-    expect(
-      extractModuleRuleOverrides({
-        moduleRuleOverrides: {
-          " cn ": [
-            { id: " direct-cn ", name: " Direct CN ", path: " geosite/cn.mrs " },
-            { id: "ip-cn", path: "geoip/cn.mrs" },
-            { id: "", path: "geosite/empty.mrs" },
-            { id: "bad", path: "https://example.com/bad.yaml" },
-          ],
-          empty: [{ id: "", path: "" }],
-          skip: "bad",
-        },
-      })
-    ).toEqual({
-      cn: [
-        { id: "direct-cn", name: "Direct CN", behavior: "domain", path: "geosite/cn.mrs" },
-        { id: "ip-cn", name: "ip-cn", behavior: "ipcidr", path: "geoip/cn.mrs", noResolve: true },
-      ],
-    });
-
-    expect(
-      extractModuleRuleExclusions({
-        moduleRuleExclusions: {
-          " cn ": [" direct-cn ", "direct-cn", "", 123],
-          bad: "not-list",
-        },
-      })
-    ).toEqual({ cn: ["direct-cn"] });
-  });
-
   it("normalizes effective test options with guarded fallbacks", () => {
     expect(getEffectiveTestOptions({ testUrl: " https://cp.cloudflare.com ", testInterval: 120 })).toEqual({
       testUrl: "https://cp.cloudflare.com",
@@ -79,10 +46,15 @@ describe("subscription config utils", () => {
             emoji: "M",
             groupType: "load-balance",
             strategy: "bad",
-            rules: [
-              { id: "youtube", name: "YouTube", behavior: "domain", url: "https://rules.example.com/youtube.mrs" },
-              { id: "", name: "Bad", behavior: "domain", url: "" },
-            ],
+          },
+        ],
+        customRuleSets: [
+          {
+            id: "youtube",
+            name: "YouTube",
+            behavior: "domain",
+            path: "https://rules.example.com/youtube.mrs",
+            target: "Media",
           },
         ],
         dialerProxyGroups: [
@@ -182,10 +154,6 @@ describe("subscription config utils", () => {
   });
 
   it("drops malformed persisted config while keeping safe defaults", () => {
-    expect(extractModuleRuleOverrides({ moduleRuleOverrides: null })).toBeUndefined();
-    expect(extractModuleRuleOverrides({ moduleRuleOverrides: { " ": [] } })).toBeUndefined();
-    expect(extractModuleRuleExclusions({ moduleRuleExclusions: {} })).toBeUndefined();
-
     const options = buildGenerateOptionsFromConfig(
       {
         template: "bad",
@@ -200,9 +168,15 @@ describe("subscription config utils", () => {
         customProxyGroups: [
           "bad",
           { id: "", name: "Bad", emoji: "B", groupType: "select" },
-          { id: "fallback", name: "Fallback", emoji: "F", groupType: "fallback", rules: ["bad"] },
+          { id: "fallback", name: "Fallback", emoji: "F", groupType: "fallback" },
           { id: "direct", name: "Direct", emoji: "D", groupType: "direct-first" },
           { id: "reject", name: "Reject", emoji: "R", groupType: "reject-first" },
+        ],
+        customRuleSets: [
+          "bad",
+          { id: "", name: "Bad", behavior: "domain", path: "geosite/bad.mrs", target: "Fallback" },
+          { id: "bad-behavior", name: "Bad", behavior: "bad", path: "geosite/bad.mrs", target: "Fallback" },
+          { id: "bad-path", name: "Bad", behavior: "domain", path: "plain.txt", target: "Fallback" },
         ],
         dialerProxyGroups: ["bad", { id: "bad", name: "Bad", type: "fallback" }],
         filteredProxyGroups: [

@@ -119,7 +119,6 @@ function hasMeaningfulConfig(state: ConfigState): boolean {
     hasRecordEntries(state.proxyGroupNameOverrides) ||
     state.proxyGroupOrder.length > 0 ||
     state.ruleOrder.length > 0 ||
-    state.allRulesOrderEditingEnabled !== initialState.allRulesOrderEditingEnabled ||
     state.moduleRuleEditWarningAccepted !== initialState.moduleRuleEditWarningAccepted ||
     state.appliedTemplateId !== initialState.appliedTemplateId ||
     state.template !== initialState.template ||
@@ -155,7 +154,6 @@ function buildHandoffState(state: ConfigState): Partial<ConfigState> {
     proxyGroupNameOverrides: state.proxyGroupNameOverrides,
     proxyGroupOrder: state.proxyGroupOrder,
     ruleOrder: state.ruleOrder,
-    allRulesOrderEditingEnabled: state.allRulesOrderEditingEnabled,
     moduleRuleEditWarningAccepted: state.moduleRuleEditWarningAccepted,
     appliedTemplateId: state.appliedTemplateId,
     dnsYaml: state.dnsYaml,
@@ -192,14 +190,10 @@ function normalizeHandoffState(raw: unknown): Partial<ConfigState> | null {
   if (customProxyGroups || ruleModel.customProxyGroups.length > 0) out.customProxyGroups = ruleModel.customProxyGroups;
   const filteredProxyGroups = objectArray<ConfigState["filteredProxyGroups"][number]>(raw.filteredProxyGroups);
   if (filteredProxyGroups) out.filteredProxyGroups = filteredProxyGroups;
-  if (
-    Array.isArray(raw.customRuleSets) ||
-    isRecord(raw.moduleRuleOverrides) ||
-    (customProxyGroups || ruleModel.customProxyGroups.length > 0)
-  ) {
+  if (Array.isArray(raw.customRuleSets)) {
     out.customRuleSets = ruleModel.customRuleSets;
   }
-  if (isRecord(raw.builtinRuleEdits) || isRecord(raw.moduleRuleExclusions) || isRecord(raw.moduleRuleOverrides)) {
+  if (isRecord(raw.builtinRuleEdits)) {
     out.builtinRuleEdits = ruleModel.builtinRuleEdits;
   }
   const customRules = objectArray<ConfigState["customRules"][number]>(raw.customRules);
@@ -211,7 +205,6 @@ function normalizeHandoffState(raw: unknown): Partial<ConfigState> | null {
   if (proxyGroupOrder) out.proxyGroupOrder = proxyGroupOrder;
   const ruleOrder = stringArray(raw.ruleOrder);
   if (ruleOrder) out.ruleOrder = ruleOrder;
-  if (typeof raw.allRulesOrderEditingEnabled === "boolean") out.allRulesOrderEditingEnabled = raw.allRulesOrderEditingEnabled;
   if (typeof raw.moduleRuleEditWarningAccepted === "boolean") out.moduleRuleEditWarningAccepted = raw.moduleRuleEditWarningAccepted;
   if (typeof raw.appliedTemplateId === "string" || raw.appliedTemplateId === null) {
     out.appliedTemplateId = raw.appliedTemplateId;

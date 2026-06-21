@@ -9,10 +9,10 @@ import {
   getEffectiveModuleRuleItems,
   getExcludedModuleRuleIds,
   isModuleRuleMovedFrom,
-  type ModuleRuleExclusions as HiddenPresetRuleIds,
+  type HiddenPresetRuleIds,
 } from "@subboost/core/generator/module-rules";
 import type { ProxyGroupModule } from "@subboost/core/generator/proxy-groups";
-import type { CustomProxyGroup, ModuleRuleOverride } from "@subboost/ui/store/config-store";
+import type { CustomProxyGroup, RuleSetDraft } from "@subboost/ui/store/config-store";
 import { cn } from "@subboost/ui/lib/utils";
 import type {
   CustomRuleListItem,
@@ -25,10 +25,6 @@ import {
   ProxyGroupNameEditor,
 } from "./proxy-group-name-editor";
 import { ProxyGroupSummary } from "./proxy-group-summary";
-
-type CustomProxyGroupRuleView = CustomProxyGroup & {
-  rules?: Array<{ id?: unknown }>;
-};
 
 function ModuleHintPopover({ moduleId }: { moduleId: string }) {
   const isGemini = moduleId === "gemini";
@@ -142,10 +138,10 @@ export function ProxyGroupsModuleCard({
   onCancelEditing: () => void;
   onCommitEditing: () => void;
   onHide: () => void;
-  extraRules: ModuleRuleOverride[];
-  ruleSetsByTarget: Record<string, ModuleRuleOverride[]>;
+  extraRules: RuleSetDraft[];
+  ruleSetsByTarget: Record<string, RuleSetDraft[]>;
   hiddenPresetRuleIds: HiddenPresetRuleIds;
-  customProxyGroups: CustomProxyGroupRuleView[];
+  customProxyGroups: CustomProxyGroup[];
   manualRules: CustomRuleListItem[];
   manualRuleTargets: ProxyGroupRuleTarget[];
   enabledProxyGroups: string[];
@@ -155,9 +151,9 @@ export function ProxyGroupsModuleCard({
   acceptModuleRuleEditWarning: () => void;
   isRulesExpanded: boolean;
   onToggleRulesExpanded: () => void;
-  onAddRules: (rules: ModuleRuleOverride[]) => void;
-  onAddRulesToModule: (moduleId: string, rules: ModuleRuleOverride[]) => void;
-  onAddRuleToCustomGroup: (groupId: string, rule: ModuleRuleOverride) => void;
+  onAddRules: (rules: RuleSetDraft[]) => void;
+  onAddRulesToModule: (moduleId: string, rules: RuleSetDraft[]) => void;
+  onAddRuleToCustomGroup: (groupId: string, rule: RuleSetDraft) => void;
   onRemoveExtraRule: (ruleId: string) => void;
   onMoveRule: (ruleId: string, target: { kind: "module" | "custom"; id: string }) => void;
   onMoveManualRule: (ruleId: string, targetName: string) => void;
@@ -173,7 +169,7 @@ export function ProxyGroupsModuleCard({
   const excludedRuleIds = getExcludedModuleRuleIds(module.id, hiddenPresetRuleIds);
   const excludedRules = module.rules.filter((rule) => rule?.id && excludedRuleIds.has(rule.id));
   const movedCount = excludedRules.filter((rule) =>
-    isModuleRuleMovedFrom(module.id, rule.id, ruleSetsByTarget, customProxyGroups)
+    isModuleRuleMovedFrom(module.id, rule.id, ruleSetsByTarget)
   ).length;
   const removedCount = excludedRules.length - movedCount;
   const excludedCount = excludedRules.length;

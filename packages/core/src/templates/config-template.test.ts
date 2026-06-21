@@ -49,9 +49,10 @@ describe("validateSubBoostTemplateConfig", () => {
   });
 
   it("normalizes rich template config fields", () => {
-    const moduleId = getModulesForTemplate("minimal")[0];
+    const moduleId = "ai";
     const result = validateSubBoostTemplateConfig(
       validConfig({
+        enabledProxyGroups: [...getModulesForTemplate("minimal"), moduleId],
         hiddenProxyGroups: [],
         customProxyGroups: [
           {
@@ -69,6 +70,14 @@ describe("validateSubBoostTemplateConfig", () => {
             path: "https://rules.example.com/custom.mrs",
             target: "Custom",
             noResolve: false,
+          },
+          {
+            id: "extra",
+            name: "Extra",
+            behavior: "ipcidr",
+            path: "geoip/private.mrs",
+            target: "Renamed",
+            noResolve: true,
           },
         ],
         filteredProxyGroups: [
@@ -104,26 +113,14 @@ describe("validateSubBoostTemplateConfig", () => {
             enabled: false,
           },
         ],
-        moduleRuleOverrides: {
-          [moduleId]: [
-            {
-              id: "extra",
-              name: "Extra",
-              behavior: "ipcidr",
-              path: "geoip/private.mrs",
-              noResolve: true,
-            },
-          ],
-        },
-        moduleRuleExclusions: {
-          [moduleId]: ["rule-a", "rule-a", ""],
+        builtinRuleEdits: {
+          [`module:${moduleId}:openai`]: { enabled: false },
         },
         proxyGroupNameOverrides: {
           [moduleId]: " Renamed ",
           empty: " ",
         },
         ruleOrder: ["missing", "missing"],
-        allRulesOrderEditingEnabled: true,
       })
     );
 
@@ -176,11 +173,21 @@ describe("validateSubBoostTemplateConfig", () => {
       targetNodes: ["Target A"],
       enabled: false,
     });
-    expect(result.config.builtinRuleEdits?.[`module:${moduleId}:rule-a`]).toEqual({ enabled: false });
+    expect(result.config.builtinRuleEdits?.[`module:${moduleId}:openai`]).toEqual({ enabled: false });
     expect(result.config.proxyGroupNameOverrides).toEqual({ [moduleId]: "Renamed" });
     expect(result.config).not.toHaveProperty("moduleRuleOverrides");
     expect(result.config).not.toHaveProperty("moduleRuleExclusions");
     expect(result.config).not.toHaveProperty("allRulesOrderEditingEnabled");
+  });
+
+  it("rejects removed rule-model compatibility fields", () => {
+    expectInvalid({ moduleRuleOverrides: {} } as never, "模板配置包含已移除字段: moduleRuleOverrides");
+    expectInvalid({ moduleRuleExclusions: {} } as never, "模板配置包含已移除字段: moduleRuleExclusions");
+    expectInvalid({ allRulesOrderEditingEnabled: true } as never, "模板配置包含已移除字段: allRulesOrderEditingEnabled");
+    expectInvalid(
+      { customProxyGroups: [{ id: "custom", name: "Custom", emoji: "", groupType: "select", rules: [] }] } as never,
+      "模板配置包含已移除字段: customProxyGroups[0].rules"
+    );
   });
 
   it("rejects template configs that hide every enabled module", () => {

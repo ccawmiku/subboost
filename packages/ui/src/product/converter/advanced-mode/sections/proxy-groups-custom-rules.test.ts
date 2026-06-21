@@ -435,7 +435,7 @@ describe("ProxyGroupsCustomRules", () => {
     expect(mocks.store.removeCustomRule).toHaveBeenCalledWith(0);
   });
 
-  it("ignores incomplete additions, records unknown rule kinds, and exits stale edits", () => {
+  it("ignores incomplete additions and exits stale edits", () => {
     renderRules({ 1: "   ", 2: "DIRECT" });
     mocks.captures.buttons
       .find((props) => props.children === "添加规则")
@@ -454,21 +454,6 @@ describe("ProxyGroupsCustomRules", () => {
       "Custom Group",
       "Filter Group",
     ]);
-
-    renderRules({ 0: "RULE-SET" as any, 1: " rule.mrs ", 2: "DIRECT" });
-    mocks.captures.buttons
-      .find((props) => props.children === "添加规则")
-      .onClick();
-    expect(mocks.store.addCustomRule).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "RULE-SET",
-        value: "rule.mrs",
-      }),
-    );
-    expect(mocks.interactions.ruleAdded).toHaveBeenCalledWith({
-      source: "manual",
-      kind: "unknown",
-    });
 
     const stale = renderRules(
       {

@@ -1,6 +1,5 @@
 import type { GenerateOptions } from "@subboost/core/generator";
 import { normalizePersistedRuleOrder } from "@subboost/core/generator/rules";
-import { normalizeModuleRuleExclusions, type ModuleRuleExclusions } from "@subboost/core/generator/module-rules";
 import type { DialerProxyGroup } from "@subboost/core/types/template-config";
 import type { ParsedNode } from "@subboost/core/types/node";
 import {
@@ -17,55 +16,6 @@ import { buildProxyProvidersFromConfig } from "@subboost/core/subscription/proxy
 import { ensureCustomRuleId } from "@subboost/core/rules/custom-rule-utils";
 import { DEFAULT_SUBBOOST_CONFIG } from "@subboost/core/config/defaults";
 import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
-
-export type ModuleRuleOverrideLike = {
-  id: string;
-  name: string;
-  behavior: "domain" | "ipcidr";
-  path: string;
-  noResolve?: boolean;
-};
-
-const RULE_PATH_RE = /^(geosite|geoip)\/[^/]+\.mrs$/i;
-
-export function extractModuleRuleOverrides(
-  config: Record<string, unknown>
-): Record<string, ModuleRuleOverrideLike[]> | undefined {
-  const raw = config.moduleRuleOverrides;
-  if (!raw || typeof raw !== "object") return undefined;
-
-  const out: Record<string, ModuleRuleOverrideLike[]> = {};
-  for (const [moduleIdRaw, rulesRaw] of Object.entries(raw as Record<string, unknown>)) {
-    const moduleId = (moduleIdRaw || "").trim();
-    if (!moduleId) continue;
-    if (!Array.isArray(rulesRaw)) continue;
-
-    const normalized: ModuleRuleOverrideLike[] = [];
-    for (const item of rulesRaw as unknown[]) {
-      if (!item || typeof item !== "object") continue;
-      const obj = item as Record<string, unknown>;
-      const id = typeof obj.id === "string" ? obj.id.trim() : "";
-      const path = typeof obj.path === "string" ? obj.path.trim() : "";
-      if (!id || !path || !RULE_PATH_RE.test(path)) continue;
-
-      const behavior =
-        obj.behavior === "ipcidr" || path.toLowerCase().startsWith("geoip/") ? "ipcidr" : "domain";
-      const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : id;
-      const noResolve = Boolean(obj.noResolve) || behavior === "ipcidr";
-
-      normalized.push({ id, name, behavior, path, ...(noResolve ? { noResolve: true } : {}) });
-    }
-
-    if (normalized.length > 0) out[moduleId] = normalized;
-  }
-
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
-export function extractModuleRuleExclusions(config: Record<string, unknown>): ModuleRuleExclusions | undefined {
-  const normalized = normalizeModuleRuleExclusions(config.moduleRuleExclusions);
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

@@ -12,7 +12,6 @@ import {
   createCustomRuleId,
   ensureCustomRuleId,
   ensureCustomRulesHaveIds,
-  getCustomGroupRuleOrderKey,
   getCustomRuleOrderKey,
   isCustomRuleType,
   listEditableRuleOrderKeys,
@@ -145,7 +144,6 @@ describe("custom rule id and order helpers", () => {
     ] as CustomRuleSet[];
 
     expect(getCustomRuleOrderKey("r1")).toBe("custom-rule:r1");
-    expect(getCustomGroupRuleOrderKey("g1", "r1")).toBe("custom-group:g1:r1");
     expect(listEditableRuleOrderKeys(customRules, customRuleSets)).toEqual([
       `custom-rule:${ruleWithoutId.id}`,
       "custom-rule-set:rule-a",

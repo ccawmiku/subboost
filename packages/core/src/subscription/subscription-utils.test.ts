@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { ParsedNode } from "../types/node";
 import {
   buildGenerateOptionsFromConfig,
-  extractModuleRuleExclusions,
-  extractModuleRuleOverrides,
   getEffectiveTestOptions,
 } from "./config-utils";
 import {
@@ -170,32 +168,6 @@ describe("subscription URL and config helpers", () => {
     expect(tryNormalizeSubscriptionUrlInput(" ")).toBeNull();
     expect(tryNormalizeSubscriptionUrlInput("https://example.com/sub")).toBe("https://example.com/sub");
     expect(tryNormalizeSubscriptionUrlInput("not a url")).toBeNull();
-  });
-
-  it("normalizes module rule config fragments", () => {
-    expect(
-      extractModuleRuleOverrides({
-        moduleRuleOverrides: {
-          cn: [
-            { id: " extra ", name: "", behavior: "domain", path: "geosite/example.mrs" },
-            { id: "ip", behavior: "domain", path: "geoip/private.mrs" },
-            { id: "bad", path: "https://example.com/list.mrs" },
-          ],
-        },
-      })
-    ).toEqual({
-      cn: [
-        { id: "extra", name: "extra", behavior: "domain", path: "geosite/example.mrs" },
-        { id: "ip", name: "ip", behavior: "ipcidr", path: "geoip/private.mrs", noResolve: true },
-      ],
-    });
-    expect(
-      extractModuleRuleExclusions({
-        moduleRuleExclusions: {
-          cn: ["rule-a", "rule-a", " ", "rule-b"],
-        },
-      })
-    ).toEqual({ cn: ["rule-a", "rule-b"] });
   });
 
   it("builds generate options from persisted config and strips imported-only fields", () => {

@@ -11,11 +11,10 @@ type SettingsActions = Pick<
   | "setRuleProviderBaseUrl"
   | "setCnIpNoResolve"
   | "setExperimentalCnUseCnRuleSet"
-  | "setAllRulesOrderEditingEnabled"
 >;
 
 export function createSettingsActions(
-  set: SetState,
+  _set: SetState,
   _get: GetState,
   setAndGenerateConfig: SetAndGenerateConfig
 ): SettingsActions {
@@ -50,10 +49,6 @@ export function createSettingsActions(
 
     setExperimentalCnUseCnRuleSet: (value: boolean) => {
       setAndGenerateConfig(() => ({ experimentalCnUseCnRuleSet: Boolean(value) }));
-    },
-
-    setAllRulesOrderEditingEnabled: (enabled: boolean) => {
-      set({ allRulesOrderEditingEnabled: Boolean(enabled) });
     },
   };
 }

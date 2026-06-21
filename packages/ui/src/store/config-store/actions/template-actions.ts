@@ -1,7 +1,7 @@
 import { getBuiltinTemplateId } from "@subboost/core/templates/builtin";
 import { TEMPLATES } from "@subboost/core/templates";
 import { ensureCustomRulesHaveIds } from "@subboost/core/rules/custom-rule-utils";
-import { hasFullRuleOrderKeys, normalizePersistedRuleOrder } from "@subboost/core/generator/rules";
+import { normalizePersistedRuleOrder } from "@subboost/core/generator/rules";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
 import type { ConfigActions, SubBoostTemplateConfig } from "../definitions";
@@ -31,10 +31,6 @@ function normalizeHiddenProxyGroups(value: unknown): string[] {
   return out;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 export function createTemplateActions(
   set: SetState,
   _get: GetState,
@@ -52,7 +48,6 @@ export function createTemplateActions(
         customRuleSets: [],
         builtinRuleEdits: {},
         ruleOrder: [],
-        allRulesOrderEditingEnabled: false,
         moduleRuleEditWarningAccepted: false,
       }));
     },
@@ -88,25 +83,17 @@ export function createTemplateActions(
         const ruleModel = normalizeRuleModelFromConfig(config);
         const hasCustomProxyGroups = Array.isArray(config.customProxyGroups);
         const hasCustomRuleSets = Array.isArray(config.customRuleSets);
-        const hasLegacyModuleRuleOverrides = isRecord((config as Record<string, unknown>).moduleRuleOverrides);
-        const hasLegacyModuleRuleExclusions = isRecord((config as Record<string, unknown>).moduleRuleExclusions);
-        const hasBuiltinRuleEdits = isRecord(config.builtinRuleEdits);
+        const hasBuiltinRuleEdits = Boolean(config.builtinRuleEdits && typeof config.builtinRuleEdits === "object");
         const nextCustomProxyGroups =
           hasCustomProxyGroups || ruleModel.customProxyGroups.length > 0
             ? ruleModel.customProxyGroups
             : state.customProxyGroups;
         const nextCustomRuleSets =
-          hasCustomRuleSets ||
-          hasLegacyModuleRuleOverrides ||
-          hasCustomProxyGroups
+          hasCustomRuleSets
             ? ruleModel.customRuleSets
             : state.customRuleSets;
         const nextBuiltinRuleEdits =
-          hasBuiltinRuleEdits ||
-          hasLegacyModuleRuleExclusions ||
-          hasLegacyModuleRuleOverrides
-            ? ruleModel.builtinRuleEdits
-            : state.builtinRuleEdits;
+          hasBuiltinRuleEdits ? ruleModel.builtinRuleEdits : state.builtinRuleEdits;
         const nextCustomRules = Array.isArray(config.customRules)
           ? ensureCustomRulesHaveIds(config.customRules)
           : state.customRules;
@@ -117,9 +104,7 @@ export function createTemplateActions(
           Array.isArray(config.customRules) ||
           hasCustomProxyGroups ||
           hasCustomRuleSets ||
-          hasBuiltinRuleEdits ||
-          hasLegacyModuleRuleExclusions ||
-          hasLegacyModuleRuleOverrides;
+          hasBuiltinRuleEdits;
         const nextEnabledModulesRaw = Array.isArray(config.enabledProxyGroups)
           ? config.enabledProxyGroups
           : state.enabledProxyGroups;
@@ -145,8 +130,6 @@ export function createTemplateActions(
               ruleOrder: config.ruleOrder,
             })
           : state.ruleOrder;
-        const legacyAllRulesOrderEditingEnabled = (config as Record<string, unknown>).allRulesOrderEditingEnabled;
-
         return {
           // 不触碰 nodes/sources：模板只描述“生成策略”，节点仍由用户导入
           template: config.template ?? state.template,
@@ -161,12 +144,6 @@ export function createTemplateActions(
           moduleRuleEditWarningAccepted: false,
           customRules: nextCustomRules,
           ruleOrder: nextRuleOrder,
-          allRulesOrderEditingEnabled:
-            typeof legacyAllRulesOrderEditingEnabled === "boolean"
-              ? legacyAllRulesOrderEditingEnabled
-              : shouldRefreshRuleOrder
-                ? hasFullRuleOrderKeys(nextRuleOrder)
-                : state.allRulesOrderEditingEnabled,
           cnIpNoResolve:
             typeof config.cnIpNoResolve === "boolean" ? config.cnIpNoResolve : state.cnIpNoResolve,
           experimentalCnUseCnRuleSet:

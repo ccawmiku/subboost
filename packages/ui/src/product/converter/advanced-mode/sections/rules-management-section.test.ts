@@ -45,6 +45,8 @@ vi.mock("@subboost/ui/components/ui/switch", () => ({
 }));
 vi.mock("@subboost/core/generator/rules", () => ({
   buildGeneratedRuleEntries: mocks.buildGeneratedRuleEntries,
+  hasFullRuleOrderKeys: (ruleOrder: string[] | undefined) =>
+    Array.isArray(ruleOrder) && ruleOrder.some((key) => key.startsWith("module:") || key.startsWith("special:")),
 }));
 vi.mock("@subboost/ui/store/config-store", () => ({ useConfigStore: () => mocks.store }));
 vi.mock("../section-header", () => ({
@@ -90,10 +92,8 @@ function renderSection(overrides: Record<string, unknown> = {}) {
     proxyGroupNameOverrides: {},
     cnIpNoResolve: true,
     experimentalCnUseCnRuleSet: true,
-    ruleOrder: ["module:geo", "custom:one"],
+    ruleOrder: ["custom:one"],
     setRuleOrder: vi.fn(),
-    allRulesOrderEditingEnabled: false,
-    setAllRulesOrderEditingEnabled: vi.fn(),
     ...overrides,
   };
   stateMock.setter.mockClear();
@@ -155,7 +155,7 @@ describe("RulesManagementSection", () => {
       expect.objectContaining({
         enabledModules: ["core"],
         cnIpNoResolve: true,
-        ruleOrder: ["module:geo", "custom:one"],
+        ruleOrder: ["custom:one"],
       })
     );
   });
@@ -183,7 +183,7 @@ describe("RulesManagementSection", () => {
     ];
 
     const defaultTree = renderSection();
-    const allRulesTree = renderSection({ allRulesOrderEditingEnabled: true });
+    const allRulesTree = renderSection({ ruleOrder: ["custom-rule:ip", "special:match"] });
     const detail = collectElements(
       defaultTree,
       (element) =>
@@ -296,7 +296,7 @@ describe("RulesManagementSection", () => {
 
     mocks.confirmDialog.mockResolvedValueOnce(false);
     await switchElement.props.onCheckedChange(true);
-    expect(mocks.store.setAllRulesOrderEditingEnabled).not.toHaveBeenCalled();
+    expect(mocks.store.setRuleOrder).not.toHaveBeenCalled();
 
     mocks.confirmDialog.mockResolvedValueOnce(true);
     await switchElement.props.onCheckedChange(true);
@@ -308,14 +308,14 @@ describe("RulesManagementSection", () => {
         variant: "warning",
       })
     );
-    expect(mocks.store.setAllRulesOrderEditingEnabled).toHaveBeenCalledWith(true);
+    expect(mocks.store.setRuleOrder).toHaveBeenCalledWith(["module:geo", "custom:one"]);
 
     const enabledSwitch = collectElements(
-      renderSection({ allRulesOrderEditingEnabled: true }),
+      renderSection({ ruleOrder: ["module:geo", "custom:one"] }),
       (element) => Boolean((element.props as any).onCheckedChange)
     )[0];
     await enabledSwitch.props.onCheckedChange(false);
-    expect(mocks.store.setAllRulesOrderEditingEnabled).toHaveBeenCalledWith(false);
+    expect(mocks.store.setRuleOrder).toHaveBeenCalledWith(["custom:one"]);
   });
 
   it("moves editable rules by buttons, absolute order input, blur, and escape cleanup", () => {
@@ -358,8 +358,6 @@ describe("RulesManagementSection", () => {
       experimentalCnUseCnRuleSet: false,
       ruleOrder: [],
       setRuleOrder: vi.fn(),
-      allRulesOrderEditingEnabled: false,
-      setAllRulesOrderEditingEnabled: vi.fn(),
     };
     const tree = RulesManagementSection({ isExpanded: false, onToggle: vi.fn() });
     const header = collectElements(tree, (element) => element.props.title === "规则管理")[0];

@@ -36,12 +36,19 @@ const FILTERED_GROUP_TYPES = new Set<FilteredProxyGroupType>([
   "reject-first",
 ]);
 const NODE_REGIONS = new Set<NodeRegion>(["us", "hk", "jp", "sg", "tw", "kr", "uk", "de", "fr", "ca", "au", "other"]);
+const REMOVED_TEMPLATE_FIELDS = new Set([
+  "moduleRuleOverrides",
+  "moduleRuleExclusions",
+  "allRulesOrderEditingEnabled",
+]);
 
 export function validateSubBoostTemplateConfig(value: unknown): ValidationResult {
   if (!isRecord(value)) return invalid("模板配置必须是对象");
   if (value.schema !== SUBBOOST_TEMPLATE_CONFIG_SCHEMA) {
     return invalid("模板配置 schema 无效");
   }
+  const removedField = findRemovedTemplateField(value);
+  if (removedField) return invalid(`模板配置包含已移除字段: ${removedField}`);
 
   const template = parseTemplateType(value.template);
   if (!template) return invalid("模板类型无效");
@@ -141,6 +148,20 @@ function invalid(error: string): { ok: false; error: string } {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function findRemovedTemplateField(value: Record<string, unknown>): string | null {
+  for (const field of REMOVED_TEMPLATE_FIELDS) {
+    if (field in value) return field;
+  }
+
+  if (!Array.isArray(value.customProxyGroups)) return null;
+  for (let index = 0; index < value.customProxyGroups.length; index += 1) {
+    const group = value.customProxyGroups[index];
+    if (isRecord(group) && "rules" in group) return `customProxyGroups[${index}].rules`;
+  }
+
+  return null;
 }
 
 function parseTemplateType(value: unknown): TemplateType | null {

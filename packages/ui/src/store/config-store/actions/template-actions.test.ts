@@ -37,7 +37,6 @@ describe("createTemplateActions", () => {
       customRuleSets: [{ id: "custom-ai", name: "Custom AI", behavior: "domain", path: "geosite/custom-ai.mrs", target: "🤖 AI 服务" }],
       builtinRuleEdits: { "module:ai:anthropic": { enabled: false } },
       ruleOrder: ["module:ai:openai"],
-      allRulesOrderEditingEnabled: true,
       moduleRuleEditWarningAccepted: true,
     });
 
@@ -52,7 +51,6 @@ describe("createTemplateActions", () => {
       customRuleSets: [],
       builtinRuleEdits: {},
       ruleOrder: [],
-      allRulesOrderEditingEnabled: false,
       moduleRuleEditWarningAccepted: false,
     });
 
@@ -117,13 +115,9 @@ describe("createTemplateActions", () => {
           excludedNodeNames: [],
         },
       ],
-      moduleRuleOverrides: {
-        google: [{ id: "openai", name: "OpenAI", behavior: "domain", path: "geosite/openai.mrs" }],
-      },
-      moduleRuleExclusions: { ai: ["openai", ""], missing: ["ignored"] },
+      builtinRuleEdits: { "module:ai:openai": { target: "🔍 Google" } },
       customRules: [{ id: "", type: "DOMAIN-SUFFIX", value: "example.com", target: "Proxy" }],
       ruleOrder: ["custom-rule:custom-rule-domain-suffix-example-com-proxy-1"],
-      allRulesOrderEditingEnabled: true,
       cnIpNoResolve: false,
       experimentalCnUseCnRuleSet: true,
       dialerProxyGroups: [
@@ -163,7 +157,6 @@ describe("createTemplateActions", () => {
         },
       ],
       builtinRuleEdits: { "module:ai:openai": { target: "🔍 Google" } },
-      allRulesOrderEditingEnabled: true,
       moduleRuleEditWarningAccepted: false,
       cnIpNoResolve: false,
       experimentalCnUseCnRuleSet: true,
@@ -235,10 +228,7 @@ describe("createTemplateActions", () => {
       hiddenProxyGroups: [" ai ", "adult", "adult", 123],
       customProxyGroups: "bad",
       filteredProxyGroups: "bad",
-      moduleRuleOverrides: null,
-      moduleRuleExclusions: "bad",
       customRules: "bad",
-      allRulesOrderEditingEnabled: "bad",
       cnIpNoResolve: "bad",
       experimentalCnUseCnRuleSet: "bad",
       dialerProxyGroups: "bad",

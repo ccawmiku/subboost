@@ -30,7 +30,6 @@ import {
 
 export { DEFAULT_BASE_CONFIG_YAML };
 export type RuleSetDraft = Omit<CustomRuleSet, "target">;
-export type ModuleRuleOverride = RuleSetDraft;
 export type { BuiltinRuleEdits, CustomRuleSet };
 export type { DialerProxyGroup, SubBoostTemplateConfig } from "@subboost/core/types/template-config";
 
@@ -191,9 +190,6 @@ export interface ConfigState {
   // Key 格式：custom-rule:<id> / custom-rule-set:<id> / module:<moduleId>:<ruleId> / special:<id>
   ruleOrder: string[];
 
-  // 是否允许在规则管理中调整所有规则顺序；只影响 UI，不参与生成。
-  allRulesOrderEditingEnabled: boolean;
-
   // 当前配置是否已确认过“编辑预设规则”风险提示；只影响 UI，不参与生成。
   moduleRuleEditWarningAccepted: boolean;
 
@@ -252,7 +248,6 @@ export interface ConfigActions {
   updateCustomRule: (id: string, rule: Partial<Omit<CustomRule, "id">>) => void;
   removeCustomRule: (index: number) => void;
   setRuleOrder: (order: string[]) => void;
-  setAllRulesOrderEditingEnabled: (enabled: boolean) => void;
 
   // 自定义分流组
   addCustomProxyGroup: (group: Omit<CustomProxyGroup, "id">) => void;
@@ -353,7 +348,6 @@ export const initialState: ConfigState = {
   proxyGroupNameOverrides: {},
   proxyGroupOrder: [],
   ruleOrder: [],
-  allRulesOrderEditingEnabled: false,
   moduleRuleEditWarningAccepted: false,
   appliedTemplateId: getBuiltinTemplateId("minimal"),
   dnsYaml: DEFAULT_BASE_CONFIG_YAML,

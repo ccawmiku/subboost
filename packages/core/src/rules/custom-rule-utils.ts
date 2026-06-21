@@ -11,7 +11,6 @@ export const CUSTOM_RULE_TYPES = [
   "PROCESS-NAME",
   "DST-PORT",
   "SRC-PORT",
-  "RULE-SET",
 ] as const satisfies readonly CustomRule["type"][];
 
 const customRuleTypeSet = new Set<string>(CUSTOM_RULE_TYPES);
@@ -71,10 +70,6 @@ export function ensureCustomRulesHaveIds(rules: CustomRule[] | Array<Omit<Custom
 
 export function getCustomRuleOrderKey(ruleId: string): string {
   return `custom-rule:${ruleId}`;
-}
-
-export function getCustomGroupRuleOrderKey(groupId: string, ruleId: string): string {
-  return `custom-group:${groupId}:${ruleId}`;
 }
 
 export function getCustomRuleSetOrderKey(ruleSetId: string): string {

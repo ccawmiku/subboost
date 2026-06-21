@@ -16,10 +16,9 @@ import {
   CATEGORY_INFO,
   PROXY_GROUP_MODULES,
 } from "@subboost/core/generator/proxy-groups";
-import type { ModuleRuleExclusions as HiddenPresetRuleIds } from "@subboost/core/generator/module-rules";
+import type { HiddenPresetRuleIds } from "@subboost/core/generator/module-rules";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
-import { buildRuleSetUrlFromPath } from "@subboost/core/rules/rule-model";
-import { useConfigStore, type ModuleRuleOverride } from "@subboost/ui/store/config-store";
+import { useConfigStore, type RuleSetDraft } from "@subboost/ui/store/config-store";
 import {
   buildManualRuleTargets,
   listCustomRulesForTarget,
@@ -135,26 +134,14 @@ export function ProxyGroupsCategories() {
     return grouped;
   }, [hiddenProxyGroups]);
   const targetRuleView = React.useMemo(() => {
-    const ruleSetsByTarget: Record<string, ModuleRuleOverride[]> = {};
+    const ruleSetsByTarget: Record<string, RuleSetDraft[]> = {};
     const hiddenPresetRuleIds: HiddenPresetRuleIds = {};
-    const customGroupsWithRules = customProxyGroups.map((group) => ({
-      ...group,
-      rules: customRuleSets
-        .filter((ruleSet) => ruleSet.target === group.name)
-        .map((ruleSet) => ({
-          id: ruleSet.id,
-          name: ruleSet.name,
-          behavior: ruleSet.behavior,
-          url: buildRuleSetUrlFromPath(ruleSet.path, ruleProviderBaseUrl),
-          ...(ruleSet.noResolve ? { noResolve: true } : {}),
-        })),
-    }));
     const moduleNameToId = new Map<string, string>();
     for (const proxyModule of PROXY_GROUP_MODULES) {
       moduleNameToId.set(resolveModuleDisplayName(proxyModule).full, proxyModule.id);
     }
 
-    const pushRuleSetForTarget = (moduleId: string, rule: ModuleRuleOverride) => {
+    const pushRuleSetForTarget = (moduleId: string, rule: RuleSetDraft) => {
       ruleSetsByTarget[moduleId] = [...(ruleSetsByTarget[moduleId] || []), rule];
     };
     const hidePresetRule = (moduleId: string, ruleId: string) => {
@@ -199,13 +186,11 @@ export function ProxyGroupsCategories() {
       }
     }
 
-    return { ruleSetsByTarget, hiddenPresetRuleIds, customGroupsWithRules };
+    return { ruleSetsByTarget, hiddenPresetRuleIds };
   }, [
     builtinRuleEdits,
-    customProxyGroups,
     customRuleSets,
     resolveModuleDisplayName,
-    ruleProviderBaseUrl,
   ]);
 
   const hiddenModules = React.useMemo(() => {
@@ -459,7 +444,7 @@ export function ProxyGroupsCategories() {
                               extraRules={extraRules}
                               ruleSetsByTarget={targetRuleView.ruleSetsByTarget}
                               hiddenPresetRuleIds={targetRuleView.hiddenPresetRuleIds}
-                              customProxyGroups={targetRuleView.customGroupsWithRules}
+                              customProxyGroups={customProxyGroups}
                               manualRules={manualRules}
                               manualRuleTargets={manualRuleTargets}
                               enabledProxyGroups={enabledProxyGroups}

@@ -11,7 +11,6 @@ import { parseCustomRuleBatchImport } from "./custom-rule-batch-import";
 import {
   ensureCustomRuleId,
   ensureCustomRulesHaveIds,
-  getCustomGroupRuleOrderKey,
   getCustomRuleOrderKey,
   isCustomRuleType,
   listEditableRuleOrderKeys,
@@ -37,7 +36,6 @@ describe("custom rule helpers", () => {
     expect(existing.id).toBe("custom-id");
     expect(ensureCustomRulesHaveIds([rule, { type: "DOMAIN", value: "x.com", target: "DIRECT" }])).toHaveLength(2);
     expect(getCustomRuleOrderKey("r1")).toBe("custom-rule:r1");
-    expect(getCustomGroupRuleOrderKey("g1", "r1")).toBe("custom-group:g1:r1");
     expect(
       listEditableRuleOrderKeys(
         [rule],
@@ -154,7 +152,7 @@ describe("custom rule helpers", () => {
     expect(result.items.map((item) => item.message)).toContain("不支持的尾列：bad-tail");
   });
 
-  it("imports Clash rules block and YAML list rule rows", () => {
+  it("rejects manual RULE-SET rows in Clash rules block imports", () => {
     const result = parseCustomRuleBatchImport({
       text: [
         "rules:",
@@ -169,15 +167,17 @@ describe("custom rule helpers", () => {
       existingRules: [],
     });
 
-    expect(result.readyCount).toBe(3);
+    expect(result.readyCount).toBe(0);
     expect(result.skippedCount).toBe(1);
-    expect(result.canImport).toBe(true);
+    expect(result.errorCount).toBe(3);
+    expect(result.canImport).toBe(false);
     expect(result.items[0]).toMatchObject({ status: "skipped", message: "rules 块标记" });
-    expect(result.rules).toEqual([
-      expect.objectContaining({ type: "RULE-SET", value: "google@ads", target: "Proxy" }),
-      expect.objectContaining({ type: "RULE-SET", value: "google@search", target: "🔍 谷歌服务" }),
-      expect.objectContaining({ type: "RULE-SET", value: "google@video", target: "🔍 谷歌服务" }),
+    expect(result.items.slice(1).map((item) => item.message)).toEqual([
+      "未知规则类型：RULE-SET",
+      "未知规则类型：RULE-SET",
+      "未知规则类型：RULE-SET",
     ]);
+    expect(result.rules).toEqual([]);
   });
 });
 

@@ -24,7 +24,7 @@ import {
 } from "@subboost/core/rules/custom-routing-rule-sets";
 import {
   useConfigStore,
-  type ModuleRuleOverride,
+  type RuleSetDraft as StoreRuleSetDraft,
 } from "@subboost/ui/store/config-store";
 import {
   RULE_EDIT_ACTIONS_CLASS,
@@ -198,7 +198,7 @@ export function ProxyGroupsAddedRuleSets({
       return;
     }
 
-    const nextModuleRule: ModuleRuleOverride = {
+    const nextModuleRule: StoreRuleSetDraft = {
       id: item.id,
       name: item.name,
       behavior: item.behavior,

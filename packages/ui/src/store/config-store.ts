@@ -34,7 +34,6 @@ export type {
   BuiltinRuleEdits,
   CustomRuleSet,
   DialerProxyGroup,
-  ModuleRuleOverride,
   RuleSetDraft,
   SourceType,
   SubBoostTemplateConfig,
