@@ -178,13 +178,75 @@ describe("proxy group generator", () => {
     expect(groups.find((group) => group.name === "Custom normal")).toMatchObject({ use: ["remote"] });
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).toContain("Filtered");
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).toContain("Custom normal");
-    expect(groups.find((group) => group.name === "🏠 私有网络")?.proxies.slice(0, 5)).toEqual([
+    expect(groups.find((group) => group.name === "🏠 私有网络")?.proxies?.slice(0, 5)).toEqual([
       "DIRECT",
       "REJECT",
       "Filtered",
       "Custom normal",
       "🚀 节点选择",
     ]);
+  });
+
+  it("keeps filtered-node generated group variants node-scoped and appends inline custom groups without an insert point", () => {
+    const groups = generateProxyGroups({
+      nodes: [node("Node A"), node("Node B")],
+      proxyProviderNames: ["remote"],
+      enabledModules: ["select"],
+      ruleProviderBaseUrl: "https://rules.example.com",
+      testUrl: "https://probe.example.com/204",
+      testInterval: 120,
+      customProxyGroups: [
+        {
+          id: "filtered-url",
+          name: "Filtered URL",
+          emoji: "",
+          memberSource: "filtered-nodes",
+          includeInGroupMembers: true,
+          groupType: "url-test",
+          advanced: { includeRegex: "Node A" },
+        },
+        {
+          id: "filtered-fallback",
+          name: "Filtered Fallback",
+          emoji: "",
+          memberSource: "filtered-nodes",
+          includeInGroupMembers: true,
+          groupType: "fallback",
+        },
+        {
+          id: "filtered-balance",
+          name: "Filtered Balance",
+          emoji: "",
+          memberSource: "filtered-nodes",
+          includeInGroupMembers: true,
+          groupType: "load-balance",
+        },
+        customGroup("inline", "select"),
+      ],
+    });
+
+    expect(groups.slice(0, 3).map((group) => group.name)).toEqual([
+      "Filtered URL",
+      "Filtered Fallback",
+      "Filtered Balance",
+    ]);
+    expect(groups.find((group) => group.name === "Filtered URL")).toMatchObject({
+      type: "url-test",
+      proxies: ["Node A"],
+    });
+    expect(groups.find((group) => group.name === "Filtered URL")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Filtered Fallback")).toMatchObject({
+      type: "fallback",
+      proxies: ["Node A", "Node B"],
+    });
+    expect(groups.find((group) => group.name === "Filtered Fallback")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Filtered Balance")).toMatchObject({
+      type: "load-balance",
+      strategy: "consistent-hashing",
+      proxies: ["Node A", "Node B"],
+    });
+    expect(groups.find((group) => group.name === "Filtered Balance")).not.toHaveProperty("use");
+    expect(groups.at(-1)).toMatchObject({ name: "Custom inline", use: ["remote"] });
   });
 
   it("omits disabled custom groups from groups, providers, names, and custom rules", () => {

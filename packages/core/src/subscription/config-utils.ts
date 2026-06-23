@@ -169,7 +169,7 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
     if (!isRecord(item)) continue;
     const id = toTrimmedString(item.id);
     const name = toTrimmedString(item.name);
-    const emoji = toTrimmedString(item.emoji);
+    const emoji = toTrimmedString(item.emoji) ?? "";
     const groupType =
       item.groupType === "select" ||
       item.groupType === "url-test" ||

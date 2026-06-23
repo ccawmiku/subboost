@@ -49,6 +49,16 @@ describe("subscription config utils", () => {
             groupType: "load-balance",
             strategy: "bad",
           },
+          {
+            id: "disabled",
+            name: "Disabled",
+            emoji: "D",
+            enabled: false,
+            description: "Hidden group",
+            memberSource: "bad",
+            includeInGroupMembers: true,
+            groupType: "select",
+          },
         ],
         customRuleSets: [
           {
@@ -122,6 +132,13 @@ describe("subscription config utils", () => {
       includeInGroupMembers: false,
       strategy: "consistent-hashing",
     });
+    expect(options.customProxyGroups?.[1]).toMatchObject({
+      id: "disabled",
+      enabled: false,
+      description: "Hidden group",
+      includeInGroupMembers: true,
+    });
+    expect(options.customProxyGroups?.[1]).not.toHaveProperty("memberSource");
     expect(options.customRuleSets?.[0]).toMatchObject({
       id: "youtube",
       name: "YouTube",
