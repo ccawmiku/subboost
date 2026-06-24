@@ -13,10 +13,10 @@ import {
 import { Switch } from "@subboost/ui/components/ui/switch";
 import { toast } from "@subboost/ui/components/ui/toaster";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
-import { getEffectiveModuleRules } from "@subboost/core/generator/module-rules";
+import { getModuleRuleOrderKey } from "@subboost/core/generator/module-rules";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
+import { resolveProxyGroupTargetName } from "@subboost/core/proxy-group-targets";
 import {
-  buildRuleSetUrlFromPath,
   collectCustomRoutingRuleSets,
   getRuleSetTargetValue,
   normalizeRuleSetPathInput,
@@ -25,7 +25,7 @@ import {
 } from "@subboost/core/rules/custom-routing-rule-sets";
 import {
   useConfigStore,
-  type ModuleRuleOverride,
+  type RuleSetDraft as StoreRuleSetDraft,
 } from "@subboost/ui/store/config-store";
 import {
   RULE_EDIT_ACTIONS_CLASS,
@@ -65,19 +65,17 @@ export function ProxyGroupsAddedRuleSets({
   totalRules: number | null;
 }) {
   const {
-    ruleProviderBaseUrl,
     enabledProxyGroups,
     hiddenProxyGroups,
-    moduleRuleOverrides,
-    moduleRuleExclusions,
-    customProxyGroups,
-    proxyGroupNameOverrides,
+    customRuleSets = [],
+    builtinRuleEdits = {},
+    customProxyGroups = [],
+    proxyGroupNameOverrides = {},
     toggleProxyGroup,
     addModuleRules,
     updateModuleRule,
     removeModuleRule,
     moveModuleRule,
-    updateCustomProxyGroup,
   } = useConfigStore();
 
   const [editingKey, setEditingKey] = React.useState<string | null>(null);
@@ -86,11 +84,11 @@ export function ProxyGroupsAddedRuleSets({
   const addedRuleSets = React.useMemo(
     () =>
       collectCustomRoutingRuleSets({
+        customRuleSets,
         customProxyGroups,
-        moduleRuleOverrides,
         proxyGroupNameOverrides,
       }),
-    [customProxyGroups, moduleRuleOverrides, proxyGroupNameOverrides],
+    [customProxyGroups, customRuleSets, proxyGroupNameOverrides],
   );
   const visibleProxyGroupModules = React.useMemo(() => {
     const hidden = new Set(hiddenProxyGroups);
@@ -99,7 +97,7 @@ export function ProxyGroupsAddedRuleSets({
   const visibleAddedRuleSets = React.useMemo(() => {
     const hidden = new Set(hiddenProxyGroups);
     return addedRuleSets.filter(
-      (item) => !(item.source.kind === "module" && hidden.has(item.source.id)),
+      (item) => !(item.target.kind === "module" && hidden.has(item.target.id)),
     );
   }, [addedRuleSets, hiddenProxyGroups]);
 
@@ -120,50 +118,23 @@ export function ProxyGroupsAddedRuleSets({
     [customProxyGroups, proxyGroupNameOverrides, visibleProxyGroupModules],
   );
 
+  const moduleNames = React.useMemo(
+    () =>
+      Object.fromEntries(
+        PROXY_GROUP_MODULES.map((module) => [
+          module.id,
+          resolveProxyGroupModuleName(module, proxyGroupNameOverrides?.[module.id]),
+        ]),
+      ),
+    [proxyGroupNameOverrides],
+  );
+
   React.useEffect(() => {
     if (!editingKey) return;
     if (visibleAddedRuleSets.some((item) => item.key === editingKey)) return;
     setEditingKey(null);
     setDraft(null);
   }, [editingKey, visibleAddedRuleSets]);
-
-  const updateCustomGroupRule = React.useCallback(
-    (
-      groupId: string,
-      ruleId: string,
-      nextRule: CustomRoutingRuleSetItem,
-      mode: "upsert" | "remove",
-    ) => {
-      const group = useConfigStore
-        .getState()
-        .customProxyGroups.find((item) => item.id === groupId);
-      if (!group) return;
-
-      const nextRules =
-        mode === "remove"
-          ? group.rules.filter((rule) => rule.id !== ruleId)
-          : (() => {
-              const rule = {
-                id: nextRule.id,
-                name: nextRule.name,
-                behavior: nextRule.behavior,
-                url: buildRuleSetUrlFromPath(
-                  nextRule.path,
-                  ruleProviderBaseUrl,
-                ),
-                ...(nextRule.noResolve ? { noResolve: true } : {}),
-              };
-              const exists = group.rules.some((item) => item.id === ruleId);
-              if (!exists) return [...group.rules, rule];
-              return group.rules.map((item) =>
-                item.id === ruleId ? rule : item,
-              );
-            })();
-
-      updateCustomProxyGroup(groupId, { rules: nextRules });
-    },
-    [ruleProviderBaseUrl, updateCustomProxyGroup],
-  );
 
   const hasConflict = React.useCallback(
     (
@@ -175,29 +146,54 @@ export function ProxyGroupsAddedRuleSets({
           (entry) => entry.id === target.id,
         );
         if (!proxyModule) return true;
-        return getEffectiveModuleRules(
+        const moduleName = resolveProxyGroupModuleName(
           proxyModule,
-          moduleRuleOverrides,
-          moduleRuleExclusions,
-        ).some(
-          (rule) =>
-            rule.id === item.id &&
-            !(item.source.kind === "module" && item.source.id === target.id),
+          proxyGroupNameOverrides?.[proxyModule.id],
         );
+        const builtinConflict = (proxyModule.rules ?? []).some((rule) => {
+          if (rule.id !== item.id) return false;
+          const edit = builtinRuleEdits?.[getModuleRuleOrderKey(proxyModule.id, rule.id)];
+          const editTarget = edit?.target
+            ? resolveProxyGroupTargetName(edit.target, {
+                moduleNames,
+                customProxyGroups,
+                fallbackTarget: moduleName,
+              })
+            : moduleName;
+          return edit?.enabled !== false && editTarget === moduleName;
+        });
+        const customConflict = customRuleSets.some(
+          (ruleSet) =>
+            ruleSet.id === item.id &&
+            resolveProxyGroupTargetName(ruleSet.target, {
+              moduleNames,
+              customProxyGroups,
+            }) === moduleName &&
+            item.target.value !== getRuleSetTargetValue(target),
+        );
+        return builtinConflict || customConflict;
       }
 
       const group = customProxyGroups.find((entry) => entry.id === target.id);
       if (!group) return true;
-      return group.rules.some(
-        (rule) =>
-          rule.id === item.id &&
-          !(item.source.kind === "custom" && item.source.id === target.id),
+      const targetName = group.name.trim();
+      if (!targetName) return true;
+      return customRuleSets.some(
+        (ruleSet) =>
+          ruleSet.id === item.id &&
+          resolveProxyGroupTargetName(ruleSet.target, {
+            moduleNames,
+            customProxyGroups,
+          }) === targetName &&
+          item.target.value !== getRuleSetTargetValue(target),
       );
     },
     [
+      builtinRuleEdits,
       customProxyGroups,
-      moduleRuleExclusions,
-      moduleRuleOverrides,
+      customRuleSets,
+      moduleNames,
+      proxyGroupNameOverrides,
       visibleProxyGroupModules,
     ],
   );
@@ -213,11 +209,7 @@ export function ProxyGroupsAddedRuleSets({
   };
 
   const removeRuleSet = (item: CustomRoutingRuleSetItem) => {
-    if (item.source.kind === "module") {
-      removeModuleRule(item.source.id, item.id);
-    } else {
-      updateCustomGroupRule(item.source.id, item.id, item, "remove");
-    }
+    removeModuleRule(item.target.id, item.id);
     if (editingKey === item.key) cancelEditing();
   };
 
@@ -225,7 +217,7 @@ export function ProxyGroupsAddedRuleSets({
     if (!draft) return;
 
     const target = parseRuleSetTargetValue(draft.targetValue);
-    const path = normalizeRuleSetPathInput(item.path);
+    const path = normalizeRuleSetPathInput(draft.path);
     if (!target || !path) return;
 
     if (hasConflict(item, target)) {
@@ -237,20 +229,7 @@ export function ProxyGroupsAddedRuleSets({
       return;
     }
 
-    const nextItem: CustomRoutingRuleSetItem = {
-      ...item,
-      path,
-      noResolve: draft.noResolve,
-      target: {
-        kind: target.kind,
-        id: target.id,
-        value: getRuleSetTargetValue(target),
-        name:
-          targetOptions.find((option) => option.value === draft.targetValue)
-            ?.label || item.target.name,
-      },
-    };
-    const nextModuleRule: ModuleRuleOverride = {
+    const nextModuleRule: StoreRuleSetDraft = {
       id: item.id,
       name: item.name,
       behavior: item.behavior,
@@ -258,27 +237,12 @@ export function ProxyGroupsAddedRuleSets({
       ...(draft.noResolve ? { noResolve: true } : {}),
     };
 
-    if (item.source.kind === "module") {
-      if (target.kind === "module") {
-        if (item.source.id === target.id) {
-          updateModuleRule(item.source.id, item.id, nextModuleRule);
-        } else {
-          moveModuleRule(item.source.id, item.id, target);
-          updateModuleRule(target.id, item.id, nextModuleRule);
-        }
-      } else {
-        moveModuleRule(item.source.id, item.id, target);
-        updateCustomGroupRule(target.id, item.id, nextItem, "upsert");
-      }
-    } else if (target.kind === "custom") {
-      if (item.source.id !== target.id) {
-        updateCustomGroupRule(item.source.id, item.id, item, "remove");
-      }
-      updateCustomGroupRule(target.id, item.id, nextItem, "upsert");
+    if (item.target.id === target.id && item.target.kind === target.kind) {
+      updateModuleRule(item.target.id, item.id, nextModuleRule);
     } else {
-      updateCustomGroupRule(item.source.id, item.id, item, "remove");
-      if (!enabledProxyGroups.includes(target.id)) toggleProxyGroup(target.id);
-      addModuleRules(target.id, [nextModuleRule]);
+      if (target.kind === "module" && !enabledProxyGroups.includes(target.id)) toggleProxyGroup(target.id);
+      moveModuleRule(item.target.id, item.id, target);
+      updateModuleRule(target.id, item.id, nextModuleRule);
     }
 
     cancelEditing();

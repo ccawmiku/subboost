@@ -110,12 +110,14 @@ vi.mock("@subboost/ui/components/ui/select", () => ({
 }));
 vi.mock("@subboost/ui/components/ui/toaster", () => ({ toast: mocks.toast }));
 vi.mock("@subboost/core/generator/proxy-groups", () => ({
-  PROXY_GROUP_MODULES: [
-    { id: "auto", name: "Auto", rules: [] },
-    { id: "fallback", name: "Fallback", rules: [] },
-  ],
+	  PROXY_GROUP_MODULES: [
+	    { id: "auto", name: "Auto", rules: [{ id: "netflix" }] },
+	    { id: "fallback", name: "Fallback", rules: [] },
+	    { id: "bare", name: "Bare" },
+	  ],
 }));
 vi.mock("@subboost/core/generator/module-rules", () => ({
+  getModuleRuleOrderKey: (moduleId: string, ruleId: string) => `module:${moduleId}:${ruleId}`,
   getEffectiveModuleRules: vi.fn((module: { id: string }) => mocks.effectiveRulesByModule[module.id] || []),
 }));
 vi.mock("@subboost/core/proxy-group-name", () => ({
@@ -151,6 +153,7 @@ vi.mock("./proxy-groups-rules-search", () => ({
 }));
 
 import { ProxyGroupsRulesLibrary } from "./proxy-groups-rules-library";
+import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 
 const netflixRule = {
   id: "netflix",
@@ -203,6 +206,9 @@ describe("ProxyGroupsRulesLibrary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.captures = { addedRuleSets: [], badges: [], buttons: [], inputs: [], nativeButtons: [], nativeDivs: [], selects: [] };
+    (PROXY_GROUP_MODULES[0] as any).rules = [{ id: "netflix" }];
+    (PROXY_GROUP_MODULES[1] as any).rules = [];
+    (PROXY_GROUP_MODULES[2] as any).rules = undefined;
     mocks.effectiveRulesByModule = {};
     mocks.search = {
       ruleSearchKeyword: "netflix",
@@ -222,10 +228,13 @@ describe("ProxyGroupsRulesLibrary", () => {
       enabledProxyGroups: ["auto"],
       hiddenProxyGroups: [],
       toggleProxyGroup: vi.fn(),
-      moduleRuleOverrides: {},
-      moduleRuleExclusions: {},
+      customRuleSets: [],
+      builtinRuleEdits: {},
       addModuleRules: vi.fn(),
-      customProxyGroups: [{ id: "custom-1", name: "Custom", rules: [] }],
+      customProxyGroups: [
+        { id: "custom-1", name: "Custom" },
+        { id: "custom-2", name: "Target" },
+      ],
       updateCustomProxyGroup: vi.fn(),
       proxyGroupNameOverrides: { auto: "Auto", fallback: "Fallback" },
     };
@@ -271,22 +280,30 @@ describe("ProxyGroupsRulesLibrary", () => {
   });
 
   it("shows assigned rules and enables a disabled built-in group", () => {
-    mocks.effectiveRulesByModule.auto = [{ id: "netflix" }];
     let result = renderLibrary();
     expect(result.html).toContain("已启用");
     expect(result.html).toContain("属于");
 
+    (PROXY_GROUP_MODULES[0] as any).rules = [{ id: "telegram" }];
+    mocks.search.searchResults = [telegramRule];
+    result = renderLibrary();
+    expect(result.html).toContain("IP");
+
     mocks.store.enabledProxyGroups = [];
+    mocks.search.searchResults = [netflixRule, telegramRule];
+    (PROXY_GROUP_MODULES[0] as any).rules = [{ id: "netflix" }];
     renderLibrary();
     mocks.captures.buttons.find((props) => props.children === "开启代理组").onClick();
     expect(mocks.store.toggleProxyGroup).toHaveBeenCalledWith("auto");
 
-    mocks.effectiveRulesByModule = {};
-    mocks.store.customProxyGroups = [
-      { id: "custom-1", name: "Custom", rules: [{ id: "telegram" }] },
-    ];
+    mocks.store.customRuleSets = [{ id: "telegram", name: "Telegram", behavior: "ipcidr", path: "geoip/telegram.mrs", target: "Custom" }];
     result = renderLibrary();
     expect(result.html).toContain("Custom");
+    expect(result.html).toContain("已添加");
+
+    mocks.store.customRuleSets = [{ id: "telegram", name: "Telegram", behavior: "ipcidr", path: "geoip/telegram.mrs", target: "Target" }];
+    result = renderLibrary();
+    expect(result.html).toContain("Target");
     expect(result.html).toContain("已添加");
   });
 
@@ -297,25 +314,45 @@ describe("ProxyGroupsRulesLibrary", () => {
 
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
 
-    expect(mocks.store.updateCustomProxyGroup).toHaveBeenCalledWith("custom-1", {
-      rules: [
-        {
-          id: "telegram",
-          name: "Telegram",
-          behavior: "ipcidr",
-          url: "https://rules.example/geoip/telegram.mrs",
-          noResolve: true,
-        },
-      ],
-    });
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("custom-1", [
+      {
+        id: "telegram",
+        name: "Telegram",
+        behavior: "ipcidr",
+        path: "geoip/telegram.mrs",
+        noResolve: true,
+      },
+    ]);
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "已添加规则集" }));
     expect(mocks.interactions.ruleAdded).toHaveBeenCalledWith({ source: "library", kind: "ruleset" });
     expect(setters[0]).toHaveBeenCalledWith([]);
   });
 
+  it("adds selected rules to another custom group", () => {
+    const { html } = renderLibrary({ 0: [telegramRule], 1: "custom:custom-2" });
+    expect(html).toContain("自定义组");
+    expect(html).toContain("Target");
+
+    mocks.captures.buttons.find((props) => props.children === "添加").onClick();
+
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("custom-2", [
+      {
+        id: "telegram",
+        name: "Telegram",
+        behavior: "ipcidr",
+        path: "geoip/telegram.mrs",
+        noResolve: true,
+      },
+    ]);
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "已添加规则集",
+      description: expect.stringContaining("Target"),
+    }));
+  });
+
   it("adds valid selected rules to a module and reports skipped invalid rules", () => {
     mocks.store.enabledProxyGroups = [];
-    const { html } = renderLibrary({ 0: [netflixRule, invalidRule], 1: "module:auto" });
+    const { html } = renderLibrary({ 0: [telegramRule, invalidRule], 1: "module:auto" });
     expect(html).toContain("已选择");
 
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
@@ -323,11 +360,11 @@ describe("ProxyGroupsRulesLibrary", () => {
     expect(mocks.store.toggleProxyGroup).toHaveBeenCalledWith("auto");
     expect(mocks.store.addModuleRules).toHaveBeenCalledWith("auto", [
       {
-        id: "netflix",
-        name: "Netflix",
-        behavior: "domain",
-        path: "geosite/netflix.mrs",
-        noResolve: false,
+        id: "telegram",
+        name: "Telegram",
+        behavior: "ipcidr",
+        path: "geoip/telegram.mrs",
+        noResolve: true,
       },
     ]);
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
@@ -337,7 +374,6 @@ describe("ProxyGroupsRulesLibrary", () => {
   });
 
   it("warns when selected rules conflict or add nothing new", () => {
-    mocks.effectiveRulesByModule.auto = [{ id: "netflix" }];
     renderLibrary({ 0: [netflixRule], 1: "custom:custom-1" });
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
@@ -346,10 +382,7 @@ describe("ProxyGroupsRulesLibrary", () => {
     }));
     expect(mocks.store.updateCustomProxyGroup).not.toHaveBeenCalled();
 
-    mocks.effectiveRulesByModule = {};
-    mocks.store.customProxyGroups = [
-      { id: "custom-1", name: "Custom", rules: [{ id: "telegram" }] },
-    ];
+    mocks.store.customRuleSets = [{ id: "telegram", name: "Telegram", behavior: "ipcidr", path: "geoip/telegram.mrs", target: "Custom" }];
     renderLibrary({ 0: [telegramRule], 1: "custom:custom-1" });
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
@@ -359,6 +392,10 @@ describe("ProxyGroupsRulesLibrary", () => {
   });
 
   it("clears hidden module targets and toggles unassigned rule selection", () => {
+    const placeholderResult = renderLibrary({ 1: "__label_modules__" });
+    stateMock.effects[0]();
+    expect(placeholderResult.setters[1]).not.toHaveBeenCalledWith("");
+
     renderLibrary({ 1: "custom:custom-1" });
     stateMock.effects[0]();
     expect(stateMock.setters[1]).not.toHaveBeenCalledWith("");
@@ -371,12 +408,20 @@ describe("ProxyGroupsRulesLibrary", () => {
     stateMock.effects[0]();
     expect(stateMock.setters[1]).not.toHaveBeenCalledWith("");
 
+    const filteredResult = renderLibrary({ 1: "custom:missing" });
+    stateMock.effects[0]();
+    expect(filteredResult.setters[1]).toHaveBeenCalledWith("");
+
+    renderLibrary({ 1: "custom:custom-1" });
+    stateMock.effects[0]();
+    expect(stateMock.setters[1]).not.toHaveBeenCalledWith("");
+
     renderLibrary();
     const firstRuleDiv = mocks.captures.nativeDivs.find((props) => String(props.className).includes("cursor-pointer"));
     firstRuleDiv.onClick();
-    expect(stateMock.setters[0]).toHaveBeenCalledWith([netflixRule]);
+    expect(stateMock.setters[0]).toHaveBeenCalledWith([telegramRule]);
 
-    renderLibrary({ 0: [netflixRule] });
+    renderLibrary({ 0: [telegramRule] });
     const selectedRuleDiv = mocks.captures.nativeDivs.find((props) => String(props.className).includes("cursor-pointer"));
     selectedRuleDiv.onClick();
     expect(stateMock.setters[0]).toHaveBeenCalledWith([]);
@@ -434,7 +479,6 @@ describe("ProxyGroupsRulesLibrary", () => {
   });
 
   it("handles existing module rules and enabled module additions", () => {
-    mocks.effectiveRulesByModule.auto = [{ id: "netflix" }];
     renderLibrary({ 0: [netflixRule], 1: "module:auto" });
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
@@ -445,25 +489,23 @@ describe("ProxyGroupsRulesLibrary", () => {
     expect(mocks.store.addModuleRules).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
-    mocks.effectiveRulesByModule = {};
     mocks.store.enabledProxyGroups = ["auto"];
-    renderLibrary({ 0: [netflixRule], 1: "module:auto" });
+    renderLibrary({ 0: [telegramRule], 1: "module:auto" });
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
     expect(mocks.store.toggleProxyGroup).not.toHaveBeenCalled();
     expect(mocks.store.addModuleRules).toHaveBeenCalledWith("auto", [
       {
-        id: "netflix",
-        name: "Netflix",
-        behavior: "domain",
-        path: "geosite/netflix.mrs",
-        noResolve: false,
+        id: "telegram",
+        name: "Telegram",
+        behavior: "ipcidr",
+        path: "geoip/telegram.mrs",
+        noResolve: true,
       },
     ]);
 
     vi.clearAllMocks();
-    mocks.effectiveRulesByModule.auto = [{ id: "netflix" }, { id: "netflix" }];
-    mocks.store.customProxyGroups = [
-      { id: "custom-1", name: "Custom", rules: [{ id: "netflix" }, { id: "telegram" }] },
+    mocks.store.customRuleSets = [
+      { id: "telegram", name: "Telegram", behavior: "ipcidr", path: "geoip/telegram.mrs", target: "Custom" },
     ];
     renderLibrary({ 0: [telegramRule], 1: "module:fallback" });
     mocks.captures.buttons.find((props) => props.children === "添加").onClick();
@@ -472,6 +514,106 @@ describe("ProxyGroupsRulesLibrary", () => {
     ]));
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
       title: "规则集已在其他分流组中",
+      variant: "warning",
+    }));
+  });
+
+  it("handles moved builtin targets and modules without preset rules", () => {
+    mocks.store.builtinRuleEdits = { "module:auto:netflix": { target: "Target" } };
+    renderLibrary({ 0: [netflixRule], 1: "custom:custom-1" });
+    mocks.captures.buttons.find((props) => props.children === "添加").onClick();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "规则集已在其他分流组中",
+      description: expect.stringContaining("Target"),
+      variant: "warning",
+    }));
+
+    vi.clearAllMocks();
+    mocks.store.builtinRuleEdits = {};
+    mocks.store.enabledProxyGroups = [];
+    renderLibrary({ 0: [telegramRule], 1: "module:bare" });
+    mocks.captures.buttons.find((props) => props.children === "添加").onClick();
+
+    expect(mocks.store.toggleProxyGroup).toHaveBeenCalledWith("bare");
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("bare", [
+      {
+        id: "telegram",
+        name: "Telegram",
+        behavior: "ipcidr",
+        path: "geoip/telegram.mrs",
+        noResolve: true,
+      },
+    ]);
+  });
+
+  it("covers empty hints, loading-more state, disabled builtin edits, and optional interactions", () => {
+    mocks.search.ruleSearchKeyword = "";
+    mocks.search.searchResults = [];
+    mocks.search.totalRules = 0;
+    expect(renderLibrary().html).toContain("规则库");
+    expect(mocks.captures.addedRuleSets[0]).toEqual({ showSearchHint: true, totalRules: 0 });
+
+    mocks.search.ruleSearchKeyword = "all";
+    mocks.search.searchResults = [telegramRule];
+    mocks.search.totalMatched = undefined;
+    mocks.search.canLoadMore = true;
+    mocks.search.rulesSearchLoadingMore = true;
+    expect(renderLibrary().html).toContain("显示 1");
+    expect(mocks.captures.buttons.find((props) => props.onClick === mocks.search.handleLoadMore).disabled).toBe(true);
+
+    mocks.search.rulesSearchLoadingMore = false;
+    mocks.search.searchResults = [netflixRule];
+    mocks.store.builtinRuleEdits = { "module:auto:netflix": { enabled: false } };
+    renderLibrary();
+    expect(mocks.captures.nativeDivs.some((props) => String(props.className).includes("cursor-pointer"))).toBe(true);
+
+    mocks.store.builtinRuleEdits = {};
+    mocks.store.customRuleSets = [{ id: "netflix", name: "Netflix", behavior: "domain", path: "geosite/netflix.mrs", target: "Custom" }];
+    expect(renderLibrary().html).toContain("域名");
+
+    vi.clearAllMocks();
+    mocks.interactions = {};
+    mocks.store.customRuleSets = [];
+    mocks.search.searchResults = [telegramRule];
+    renderLibrary({ 0: [telegramRule], 1: "custom:custom-1" });
+    mocks.captures.buttons.find((props) => props.children === "添加").onClick();
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("custom-1", [
+      expect.objectContaining({ id: "telegram" }),
+    ]);
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "已添加规则集" }));
+  });
+
+  it("summarizes long conflict lists and warns when only invalid custom rules are selected", () => {
+    const conflictRules = Array.from({ length: 9 }, (_, index) => ({
+      ...telegramRule,
+      id: `conflict-${index}`,
+      nameZh: `Conflict ${index}`,
+      url: `https://raw.example/geoip/conflict-${index}.mrs`,
+    }));
+    mocks.store.customRuleSets = conflictRules.map((rule) => ({
+      id: rule.id,
+      name: rule.nameZh,
+      behavior: "ipcidr",
+      path: `geoip/${rule.id}.mrs`,
+      target: "Target",
+    }));
+    mocks.search.searchResults = conflictRules;
+    renderLibrary({ 0: conflictRules, 1: "custom:custom-1" });
+    mocks.captures.buttons.find((props) => props.children === "添加").onClick();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "规则集已在其他分流组中",
+      description: expect.stringContaining("以及 1 条"),
+    }));
+
+    vi.clearAllMocks();
+    mocks.store.customRuleSets = [];
+    const emptyUrlRule = { ...invalidRule, id: "empty-url", url: "" };
+    mocks.search.searchResults = [emptyUrlRule];
+    renderLibrary({ 0: [emptyUrlRule], 1: "custom:custom-1" });
+    mocks.captures.buttons.find((props) => props.children === "添加").onClick();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "没有新增规则集",
+      description: expect.stringContaining("1 条已存在"),
       variant: "warning",
     }));
   });

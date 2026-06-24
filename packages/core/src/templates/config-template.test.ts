@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getModulesForTemplate } from "@subboost/core/generator/proxy-groups";
+import { getModulesForTemplate } from "../generator/proxy-groups";
 import {
   SUBBOOST_TEMPLATE_CONFIG_SCHEMA,
   validateSubBoostTemplateConfig,
-} from "@subboost/core/templates/config-template";
+} from "./config-template";
 import { DEFAULT_LOAD_BALANCE_STRATEGY } from "@subboost/core/types/config";
 import { expectInvalid, validConfig } from "./config-template.test-helpers";
 
@@ -49,39 +49,37 @@ describe("validateSubBoostTemplateConfig", () => {
   });
 
   it("normalizes rich template config fields", () => {
-    const moduleId = getModulesForTemplate("minimal")[0];
+    const moduleId = "ai";
     const result = validateSubBoostTemplateConfig(
       validConfig({
+        enabledProxyGroups: [...getModulesForTemplate("minimal"), moduleId],
         hiddenProxyGroups: [],
         customProxyGroups: [
           {
             id: "custom",
             name: "Custom",
             emoji: "",
+            memberSource: "filtered-nodes",
+            includeInGroupMembers: false,
             groupType: "load-balance",
-            rules: [
-              {
-                id: "custom-rule",
-                name: "Custom Rule",
-                behavior: "domain",
-                url: "https://rules.example.com/custom.mrs",
-                noResolve: false,
-              },
-            ],
           },
         ],
-        filteredProxyGroups: [
+        customRuleSets: [
           {
-            id: "filtered",
-            name: "Filtered",
-            enabled: true,
-            groupType: "load-balance",
-            sourceIds: ["source-a", "source-a", ""],
-            regions: ["us", "hk"],
-            excludedNodeNames: ["Node A", "Node A"],
-            includeRegex: " US ",
-            excludeRegex: "IPv6",
-            emoji: "F",
+            id: "custom-rule",
+            name: "Custom Rule",
+            behavior: "domain",
+            path: "https://rules.example.com/custom.mrs",
+            target: "Custom",
+            noResolve: false,
+          },
+          {
+            id: "extra",
+            name: "Extra",
+            behavior: "ipcidr",
+            path: "geoip/private.mrs",
+            target: "Renamed",
+            noResolve: true,
           },
         ],
         customRules: [
@@ -103,26 +101,14 @@ describe("validateSubBoostTemplateConfig", () => {
             enabled: false,
           },
         ],
-        moduleRuleOverrides: {
-          [moduleId]: [
-            {
-              id: "extra",
-              name: "Extra",
-              behavior: "ipcidr",
-              path: "geoip/private.mrs",
-              noResolve: true,
-            },
-          ],
-        },
-        moduleRuleExclusions: {
-          [moduleId]: ["rule-a", "rule-a", ""],
+        builtinRuleEdits: {
+          [`module:${moduleId}:openai`]: { enabled: false },
         },
         proxyGroupNameOverrides: {
           [moduleId]: " Renamed ",
           empty: " ",
         },
         ruleOrder: ["missing", "missing"],
-        allRulesOrderEditingEnabled: true,
       })
     );
 
@@ -132,20 +118,29 @@ describe("validateSubBoostTemplateConfig", () => {
       id: "custom",
       name: "Custom",
       emoji: "",
+      memberSource: "filtered-nodes",
+      includeInGroupMembers: false,
       groupType: "load-balance",
       strategy: DEFAULT_LOAD_BALANCE_STRATEGY,
     });
-    expect(result.config.filteredProxyGroups?.[0]).toMatchObject({
-      id: "filtered",
-      groupType: "load-balance",
-      strategy: DEFAULT_LOAD_BALANCE_STRATEGY,
-      sourceIds: ["source-a"],
-      regions: ["us", "hk"],
-      excludedNodeNames: ["Node A"],
-      includeRegex: "US",
-      excludeRegex: "IPv6",
-      emoji: "F",
-    });
+    expect(result.config.customRuleSets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "custom-rule",
+          name: "Custom Rule",
+          behavior: "domain",
+          path: "https://rules.example.com/custom.mrs",
+          target: "Custom",
+        }),
+        expect.objectContaining({
+          id: "extra",
+          behavior: "ipcidr",
+          path: "geoip/private.mrs",
+          noResolve: true,
+        }),
+      ])
+    );
+    expect(result.config.proxyGroupAdvancedModeEnabled).toBe(true);
     expect(result.config.customRules[0]).toMatchObject({
       id: "custom-rule-a",
       value: "example.com",
@@ -158,15 +153,56 @@ describe("validateSubBoostTemplateConfig", () => {
       targetNodes: ["Target A"],
       enabled: false,
     });
-    expect(result.config.moduleRuleOverrides?.[moduleId]?.[0]).toMatchObject({
-      id: "extra",
-      behavior: "ipcidr",
-      path: "geoip/private.mrs",
-      noResolve: true,
-    });
-    expect(result.config.moduleRuleExclusions?.[moduleId]).toEqual(["rule-a"]);
+    expect(result.config.builtinRuleEdits?.[`module:${moduleId}:openai`]).toEqual({ enabled: false });
     expect(result.config.proxyGroupNameOverrides).toEqual({ [moduleId]: "Renamed" });
-    expect(result.config.allRulesOrderEditingEnabled).toBe(true);
+    expect(result.config).not.toHaveProperty("moduleRuleOverrides");
+    expect(result.config).not.toHaveProperty("moduleRuleExclusions");
+    expect(result.config).not.toHaveProperty("allRulesOrderEditingEnabled");
+  });
+
+  it("uses defaults when optional compatibility fields are omitted", () => {
+    const [moduleId] = getModulesForTemplate("minimal");
+    const result = validateSubBoostTemplateConfig(
+      validConfig({
+        hiddenProxyGroups: undefined as never,
+        proxyGroupAdvanced: {
+          [moduleId]: {
+            sourceIds: ["source-a"],
+          },
+        },
+        customRuleSets: undefined as never,
+        builtinRuleEdits: undefined as never,
+        ruleOrder: undefined as never,
+        proxyGroupNameOverrides: undefined as never,
+        cnIpNoResolve: undefined as never,
+        experimentalCnUseCnRuleSet: undefined as never,
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.hiddenProxyGroups).toEqual([]);
+    expect(result.config.proxyGroupAdvanced[moduleId]).toEqual({ sourceIds: ["source-a"] });
+    expect(result.config.customRuleSets).toEqual([]);
+    expect(result.config.builtinRuleEdits).toEqual({});
+    expect(result.config.proxyGroupNameOverrides).toEqual({});
+    expect(result.config).not.toHaveProperty("cnIpNoResolve");
+    expect(result.config).not.toHaveProperty("experimentalCnUseCnRuleSet");
+  });
+
+  it("rejects removed rule-model compatibility fields", () => {
+    expectInvalid({ moduleRuleOverrides: {} } as never, "模板配置包含已移除字段: moduleRuleOverrides");
+    expectInvalid({ moduleRuleExclusions: {} } as never, "模板配置包含已移除字段: moduleRuleExclusions");
+    expectInvalid({ allRulesOrderEditingEnabled: true } as never, "模板配置包含已移除字段: allRulesOrderEditingEnabled");
+    const removedFilteredGroupsField = `filtered${"ProxyGroups"}`;
+    expectInvalid(
+      { [removedFilteredGroupsField]: [] } as never,
+      `模板配置包含已移除字段: ${removedFilteredGroupsField}`
+    );
+    expectInvalid(
+      { customProxyGroups: [{ id: "custom", name: "Custom", emoji: "", groupType: "select", rules: [] }] } as never,
+      "模板配置包含已移除字段: customProxyGroups[0].rules"
+    );
   });
 
   it("rejects template configs that hide every enabled module", () => {

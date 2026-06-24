@@ -41,7 +41,6 @@ export function buildDefaultUserConfig(template: TemplateType): UserConfig {
 export function buildDefaultBaseConfigPatch(options: {
   mixedPort?: number;
   allowLan?: boolean;
-  includeGlobalClientFingerprint?: boolean;
 } = {}): ClashConfig {
   return {
     "mixed-port": options.mixedPort ?? DEFAULT_SUBBOOST_CONFIG.mixedPort,
@@ -51,7 +50,6 @@ export function buildDefaultBaseConfigPatch(options: {
     "unified-delay": true,
     "tcp-concurrent": true,
     "find-process-mode": "strict",
-    ...(options.includeGlobalClientFingerprint ? { "global-client-fingerprint": "chrome" } : {}),
     dns: DEFAULT_DNS_CONFIG,
     profile: {
       "store-selected": true,
@@ -87,12 +85,12 @@ export function buildDefaultSubBoostTemplateConfig(type: TemplateType): SubBoost
     enabledProxyGroups: template.groups,
     hiddenProxyGroups: [],
     customProxyGroups: [],
-    filteredProxyGroups: [],
-    moduleRuleOverrides: {},
-    moduleRuleExclusions: {},
+    proxyGroupAdvanced: {},
+    proxyGroupAdvancedModeEnabled: false,
+    customRuleSets: [],
+    builtinRuleEdits: {},
     customRules: [],
     ruleOrder: [],
-    allRulesOrderEditingEnabled: false,
     cnIpNoResolve: DEFAULT_SUBBOOST_CONFIG.cnIpNoResolve,
     experimentalCnUseCnRuleSet: DEFAULT_SUBBOOST_CONFIG.experimentalCnUseCnRuleSet,
     dialerProxyGroups: [],
@@ -114,7 +112,6 @@ log-level: info
 unified-delay: true
 tcp-concurrent: true
 find-process-mode: strict
-global-client-fingerprint: chrome
 
 # DNS 配置
 dns:

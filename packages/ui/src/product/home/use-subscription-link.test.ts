@@ -103,7 +103,8 @@ describe("useSubscriptionLink", () => {
     vi.clearAllMocks();
     resetHookState();
     mocks.bag.storeState = {
-      filteredProxyGroups: [{ id: "fg-1", name: "Fast", enabled: true, groupType: "select" }],
+      proxyGroupAdvanced: { auto: { includeRegex: "Fast" } },
+      proxyGroupAdvancedModeEnabled: true,
       proxyGroupOrder: ["select", "auto"],
     };
     originalWindow = globalThis.window;
@@ -255,7 +256,8 @@ describe("useSubscriptionLink", () => {
                 subscriptionUserInfo: { upload: 2_048, download: 1_024, total: 4_096 },
               }),
             ],
-            filteredProxyGroups: [{ id: "fg-1", name: "Fast", enabled: true, groupType: "select" }],
+            proxyGroupAdvanced: { auto: { includeRegex: "Fast" } },
+            proxyGroupAdvancedModeEnabled: true,
             listenerPorts: { "Node A": 41000 },
             proxyGroupOrder: ["select", "auto"],
           }),

@@ -1,70 +1,24 @@
 import type { GenerateOptions } from "@subboost/core/generator";
 import { normalizePersistedRuleOrder } from "@subboost/core/generator/rules";
-import { normalizeModuleRuleExclusions, type ModuleRuleExclusions } from "@subboost/core/generator/module-rules";
-import type { DialerProxyGroup, ModuleRuleOverride } from "@subboost/core/types/template-config";
+import type { DialerProxyGroup } from "@subboost/core/types/template-config";
 import type { ParsedNode } from "@subboost/core/types/node";
 import {
   DEFAULT_LOAD_BALANCE_STRATEGY,
   isLoadBalanceStrategy,
+  isProxyGroupGroupType,
   type CustomProxyGroup,
   type CustomRule,
+  type ProxyGroupRuleTarget,
   type TemplateType,
   type UserConfig,
 } from "@subboost/core/types/config";
-import type { FilteredProxyGroup, NodeRegion } from "@subboost/core/types/filtered-proxy-group";
 import { stripImportedNodeControlFieldsFromList } from "@subboost/core/subscription/imported-node-controls";
 import { buildProxyProvidersFromConfig } from "@subboost/core/subscription/proxy-providers";
 import { ensureCustomRuleId } from "@subboost/core/rules/custom-rule-utils";
 import { DEFAULT_SUBBOOST_CONFIG } from "@subboost/core/config/defaults";
-
-export type ModuleRuleOverrideLike = {
-  id: string;
-  name: string;
-  behavior: "domain" | "ipcidr";
-  path: string;
-  noResolve?: boolean;
-};
-
-const RULE_PATH_RE = /^(geosite|geoip)\/[^/]+\.mrs$/i;
-
-export function extractModuleRuleOverrides(
-  config: Record<string, unknown>
-): Record<string, ModuleRuleOverrideLike[]> | undefined {
-  const raw = config.moduleRuleOverrides;
-  if (!raw || typeof raw !== "object") return undefined;
-
-  const out: Record<string, ModuleRuleOverrideLike[]> = {};
-  for (const [moduleIdRaw, rulesRaw] of Object.entries(raw as Record<string, unknown>)) {
-    const moduleId = (moduleIdRaw || "").trim();
-    if (!moduleId) continue;
-    if (!Array.isArray(rulesRaw)) continue;
-
-    const normalized: ModuleRuleOverrideLike[] = [];
-    for (const item of rulesRaw as unknown[]) {
-      if (!item || typeof item !== "object") continue;
-      const obj = item as Record<string, unknown>;
-      const id = typeof obj.id === "string" ? obj.id.trim() : "";
-      const path = typeof obj.path === "string" ? obj.path.trim() : "";
-      if (!id || !path || !RULE_PATH_RE.test(path)) continue;
-
-      const behavior =
-        obj.behavior === "ipcidr" || path.toLowerCase().startsWith("geoip/") ? "ipcidr" : "domain";
-      const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : id;
-      const noResolve = Boolean(obj.noResolve) || behavior === "ipcidr";
-
-      normalized.push({ id, name, behavior, path, ...(noResolve ? { noResolve: true } : {}) });
-    }
-
-    if (normalized.length > 0) out[moduleId] = normalized;
-  }
-
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
-export function extractModuleRuleExclusions(config: Record<string, unknown>): ModuleRuleExclusions | undefined {
-  const normalized = normalizeModuleRuleExclusions(config.moduleRuleExclusions);
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-}
+import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
+import { normalizeProxyGroupAdvancedConfig } from "@subboost/core/proxy-group-advanced";
+import { normalizeProxyGroupTargetRef } from "@subboost/core/proxy-group-targets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -84,6 +38,12 @@ function normalizeStringArray(value: unknown): string[] {
     if (str) out.push(str);
   }
   return out;
+}
+
+function normalizeRuleTarget(value: unknown): ProxyGroupRuleTarget | null {
+  const ref = normalizeProxyGroupTargetRef(value);
+  if (ref) return ref;
+  return toTrimmedString(value);
 }
 
 function normalizeTemplate(value: unknown, fallback: TemplateType = "standard"): TemplateType {
@@ -127,7 +87,7 @@ function normalizeCustomRules(value: unknown): CustomRule[] | undefined {
     if (typeof type !== "string" || !allowedTypes.has(type as CustomRule["type"])) continue;
 
     const ruleValue = toTrimmedString(item.value);
-    const target = toTrimmedString(item.target);
+    const target = normalizeRuleTarget(item.target);
     if (!ruleValue || !target) continue;
 
     const noResolve = typeof item.noResolve === "boolean" ? item.noResolve : undefined;
@@ -180,8 +140,9 @@ function normalizeDialerProxyGroups(value: unknown): DialerProxyGroup[] {
     if (!isRecord(item)) continue;
     const id = toTrimmedString(item.id);
     const name = toTrimmedString(item.name);
-    const type = item.type === "select" || item.type === "url-test" ? item.type : null;
+    const type = isProxyGroupGroupType(item.type) ? item.type : null;
     if (!id || !name || !type) continue;
+    const strategy = isLoadBalanceStrategy(item.strategy) ? item.strategy : undefined;
 
     const enabled = typeof item.enabled === "boolean" ? item.enabled : undefined;
     const relayNodes = normalizeStringArray(item.relayNodes);
@@ -191,6 +152,7 @@ function normalizeDialerProxyGroups(value: unknown): DialerProxyGroup[] {
       id,
       name,
       type,
+      ...(type === "load-balance" ? { strategy: strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY } : {}),
       relayNodes,
       targetNodes,
       ...(enabled !== undefined ? { enabled } : {}),
@@ -207,7 +169,7 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
     if (!isRecord(item)) continue;
     const id = toTrimmedString(item.id);
     const name = toTrimmedString(item.name);
-    const emoji = toTrimmedString(item.emoji);
+    const emoji = toTrimmedString(item.emoji) ?? "";
     const groupType =
       item.groupType === "select" ||
       item.groupType === "url-test" ||
@@ -218,26 +180,7 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
         ? item.groupType
         : null;
 
-    if (!id || !name || !emoji || !groupType) continue;
-
-    const rawRules = Array.isArray(item.rules) ? item.rules : [];
-    const rules: CustomProxyGroup["rules"] = [];
-    for (const rawRule of rawRules) {
-      if (!isRecord(rawRule)) continue;
-      const rid = toTrimmedString(rawRule.id);
-      const rname = toTrimmedString(rawRule.name);
-      const behavior = rawRule.behavior === "domain" || rawRule.behavior === "ipcidr" ? rawRule.behavior : null;
-      const url = toTrimmedString(rawRule.url);
-      if (!rid || !rname || !behavior || !url) continue;
-      const noResolve = typeof rawRule.noResolve === "boolean" ? rawRule.noResolve : undefined;
-      rules.push({
-        id: rid,
-        name: rname,
-        behavior,
-        url,
-        ...(noResolve !== undefined ? { noResolve } : {}),
-      });
-    }
+    if (!id || !name || !groupType) continue;
 
     const strategy =
       groupType === "load-balance"
@@ -246,82 +189,23 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
           : DEFAULT_LOAD_BALANCE_STRATEGY
         : undefined;
 
-    out.push({ id, name, emoji, groupType, ...(strategy ? { strategy } : {}), rules });
-  }
-  return out;
-}
-
-function normalizeNodeRegions(value: unknown): NodeRegion[] {
-  const allowed: NodeRegion[] = [
-    "us",
-    "hk",
-    "jp",
-    "sg",
-    "tw",
-    "kr",
-    "uk",
-    "de",
-    "fr",
-    "ca",
-    "au",
-    "other",
-  ];
-  const allowedSet = new Set<string>(allowed);
-  const out: NodeRegion[] = [];
-  if (!Array.isArray(value)) return out;
-  for (const item of value) {
-    const s = toTrimmedString(item);
-    if (!s) continue;
-    const key = s.toLowerCase();
-    if (!allowedSet.has(key)) continue;
-    out.push(key as NodeRegion);
-  }
-  return out;
-}
-
-function normalizeFilteredProxyGroups(value: unknown): FilteredProxyGroup[] {
-  if (!Array.isArray(value)) return [];
-  const out: FilteredProxyGroup[] = [];
-  for (const item of value) {
-    if (!isRecord(item)) continue;
-    const id = toTrimmedString(item.id);
-    const name = toTrimmedString(item.name);
-    const enabled = typeof item.enabled === "boolean" ? item.enabled : null;
-    const groupTypeRaw = toTrimmedString(item.groupType) || "select";
-    const groupType =
-      groupTypeRaw === "url-test" ||
-      groupTypeRaw === "fallback" ||
-      groupTypeRaw === "load-balance" ||
-      groupTypeRaw === "direct-first" ||
-      groupTypeRaw === "reject-first"
-        ? groupTypeRaw
-        : "select";
-    const strategy =
-      groupType === "load-balance"
-        ? isLoadBalanceStrategy(item.strategy)
-          ? item.strategy
-          : DEFAULT_LOAD_BALANCE_STRATEGY
-        : undefined;
-    const sourceIds = normalizeStringArray(item.sourceIds);
-    const regions = normalizeNodeRegions(item.regions);
-    const includeRegex = toTrimmedString(item.includeRegex);
-    const excludeRegex = toTrimmedString(item.excludeRegex);
-    const excludedNodeNames = normalizeStringArray(item.excludedNodeNames);
-
-    if (!id || !name || enabled === null) continue;
-
+    const enabled = item.enabled === false ? false : undefined;
+    const description = toTrimmedString(item.description);
+    const memberSource = item.memberSource === "filtered-nodes" ? "filtered-nodes" : undefined;
+    const includeInGroupMembers =
+      typeof item.includeInGroupMembers === "boolean" ? item.includeInGroupMembers : undefined;
+    const advanced = normalizeProxyGroupAdvancedConfig(item.advanced);
     out.push({
       id,
       name,
-      enabled,
+      emoji,
+      ...(enabled === false ? { enabled: false } : {}),
+      ...(description ? { description } : {}),
+      ...(memberSource ? { memberSource } : {}),
+      ...(includeInGroupMembers !== undefined ? { includeInGroupMembers } : {}),
       groupType,
       ...(strategy ? { strategy } : {}),
-      sourceIds,
-      regions,
-      excludedNodeNames,
-      ...(includeRegex ? { includeRegex } : {}),
-      ...(excludeRegex ? { excludeRegex } : {}),
-      ...(toTrimmedString(item.emoji) ? { emoji: toTrimmedString(item.emoji) as string } : {}),
+      ...(Object.keys(advanced).length > 0 ? { advanced } : {}),
     });
   }
   return out;
@@ -345,12 +229,13 @@ export function getEffectiveTestOptions(config: Record<string, unknown>): { test
 }
 
 export function buildGenerateOptionsFromConfig(
-  config: Record<string, unknown>,
+  rawConfig: Record<string, unknown>,
   opts: {
     nodes: ParsedNode[];
     proxyProviders?: Record<string, unknown>;
   }
 ): GenerateOptions {
+  const config = rawConfig;
   const { testUrl, testInterval } = getEffectiveTestOptions(config);
   const proxyProviders =
     opts.proxyProviders ?? buildProxyProvidersFromConfig(config, { testUrl, testInterval });
@@ -360,7 +245,12 @@ export function buildGenerateOptionsFromConfig(
   const enabledGroups = normalizeEnabledList(config.enabledGroups);
   const enabledRules = normalizeEnabledList(config.enabledRules);
   const customRules = normalizeCustomRules(config.customRules);
-  const customProxyGroups = normalizeCustomProxyGroups(config.customProxyGroups);
+  const ruleModel = normalizeRuleModelFromConfig(config);
+  const customProxyGroups = ruleModel.customProxyGroups.length > 0
+    ? ruleModel.customProxyGroups
+    : normalizeCustomProxyGroups(config.customProxyGroups);
+  const customRuleSets = ruleModel.customRuleSets;
+  const builtinRuleEdits = ruleModel.builtinRuleEdits;
   const dnsYaml = typeof config.dnsYaml === "string" ? config.dnsYaml : undefined;
   const ruleProviderBaseUrl =
     typeof config.ruleProviderBaseUrl === "string" && config.ruleProviderBaseUrl.trim().startsWith("http")
@@ -377,16 +267,12 @@ export function buildGenerateOptionsFromConfig(
     typeof config.experimentalCnUseCnRuleSet === "boolean" ? config.experimentalCnUseCnRuleSet : undefined;
   const proxyGroupNameOverrides = normalizeProxyGroupNameOverrides(config.proxyGroupNameOverrides);
   const listenerPorts = normalizeListenerPorts(config.listenerPorts);
-  const moduleRuleOverrides = extractModuleRuleOverrides(config) as unknown as
-    | Record<string, ModuleRuleOverride[]>
-    | undefined;
-  const moduleRuleExclusions = extractModuleRuleExclusions(config);
   const ruleOrder = normalizePersistedRuleOrder({
     enabledModules: enabledGroups || [],
-    customRules: customRules || [],
     customProxyGroups,
-    moduleRuleOverrides: moduleRuleOverrides || {},
-    moduleRuleExclusions: moduleRuleExclusions || {},
+    customRules: customRules || [],
+    customRuleSets,
+    builtinRuleEdits,
     proxyGroupNameOverrides,
     experimentalCnUseCnRuleSet,
     cnIpNoResolve,
@@ -411,9 +297,15 @@ export function buildGenerateOptionsFromConfig(
   };
 
   const dialerProxyGroups = normalizeDialerProxyGroups(config.dialerProxyGroups);
-  const filteredProxyGroups = normalizeFilteredProxyGroups(config.filteredProxyGroups);
   const proxyGroupOrder = normalizeProxyGroupOrder(config.proxyGroupOrder);
   const sanitizedNodes = stripImportedNodeControlFieldsFromList(opts.nodes);
+  const proxyGroupAdvanced = isRecord(config.proxyGroupAdvanced)
+    ? Object.fromEntries(
+        Object.entries(config.proxyGroupAdvanced)
+          .map(([id, value]) => [id.trim(), normalizeProxyGroupAdvancedConfig(value)] as const)
+          .filter(([id, advanced]) => id && Object.keys(advanced).length > 0),
+      )
+    : undefined;
 
   return {
     nodes: sanitizedNodes,
@@ -422,9 +314,9 @@ export function buildGenerateOptionsFromConfig(
     userConfig,
     ...(dialerProxyGroups.length > 0 ? { dialerProxyGroups } : {}),
     ...(customProxyGroups.length > 0 ? { customProxyGroups } : {}),
-    ...(filteredProxyGroups.length > 0 ? { filteredProxyGroups } : {}),
-    ...(moduleRuleOverrides ? { moduleRuleOverrides } : {}),
-    ...(moduleRuleExclusions ? { moduleRuleExclusions } : {}),
+    ...(customRuleSets.length > 0 ? { customRuleSets } : {}),
+    ...(proxyGroupAdvanced && Object.keys(proxyGroupAdvanced).length > 0 ? { proxyGroupAdvanced } : {}),
+    ...(Object.keys(builtinRuleEdits).length > 0 ? { builtinRuleEdits } : {}),
     ...(proxyGroupNameOverrides ? { proxyGroupNameOverrides } : {}),
     ...(proxyGroupOrder ? { proxyGroupOrder } : {}),
   };

@@ -3,17 +3,16 @@
 import * as React from "react";
 import { DialerProxyGroupsSection } from "./sections/dialer-proxy-groups-section";
 import { DnsSection } from "./sections/dns-section";
-import { FilteredProxyGroupsSection } from "./sections/filtered-proxy-groups-section";
 import { InputSection } from "./sections/input-section";
 import { NodeManagementSection } from "./sections/node-management-section";
 import { ProxyGroupsSection } from "./sections/proxy-groups-section";
 import { RulesManagementSection } from "./sections/rules-management-section";
 
-type SectionKey = "input" | "filter" | "filtered" | "chain" | "proxy" | "rules" | "dns";
+type SectionKey = "input" | "filter" | "chain" | "proxy" | "rules" | "dns";
 
 export function AdvancedMode() {
   const [expandedSections, setExpandedSections] = React.useState<Set<SectionKey>>(
-    new Set<SectionKey>(["input", "filter", "filtered", "chain", "proxy", "rules", "dns"])
+    new Set<SectionKey>(["input", "filter", "chain", "proxy", "rules", "dns"])
   );
 
   const toggleSection = (section: SectionKey) => {
@@ -31,10 +30,6 @@ export function AdvancedMode() {
       <NodeManagementSection
         isExpanded={expandedSections.has("filter")}
         onToggle={() => toggleSection("filter")}
-      />
-      <FilteredProxyGroupsSection
-        isExpanded={expandedSections.has("filtered")}
-        onToggle={() => toggleSection("filtered")}
       />
       <DialerProxyGroupsSection isExpanded={expandedSections.has("chain")} onToggle={() => toggleSection("chain")} />
       <ProxyGroupsSection isExpanded={expandedSections.has("proxy")} onToggle={() => toggleSection("proxy")} />

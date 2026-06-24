@@ -211,12 +211,6 @@ describe("ProxyGroupsCustomRules", () => {
       removeCustomRule: vi.fn(),
       enabledProxyGroups: ["auto"],
       customProxyGroups: [{ id: "custom-1", name: "Custom Group", rules: [] }],
-      filteredProxyGroups: [
-        { name: " Filter Group ", enabled: true },
-        { name: "Disabled", enabled: false },
-        { name: "   ", enabled: true },
-        { name: 123, enabled: true },
-      ],
       proxyGroupNameOverrides: { auto: "节点选择" },
     };
   });
@@ -278,7 +272,6 @@ describe("ProxyGroupsCustomRules", () => {
           "REJECT",
           "节点选择",
           "Custom Group",
-          "Filter Group",
           "Legacy Target",
         ],
         existingRules: [],
@@ -435,7 +428,7 @@ describe("ProxyGroupsCustomRules", () => {
     expect(mocks.store.removeCustomRule).toHaveBeenCalledWith(0);
   });
 
-  it("ignores incomplete additions, records unknown rule kinds, and exits stale edits", () => {
+  it("ignores incomplete additions and exits stale edits", () => {
     renderRules({ 1: "   ", 2: "DIRECT" });
     mocks.captures.buttons
       .find((props) => props.children === "添加规则")
@@ -452,23 +445,7 @@ describe("ProxyGroupsCustomRules", () => {
       "REJECT",
       "节点选择",
       "Custom Group",
-      "Filter Group",
     ]);
-
-    renderRules({ 0: "RULE-SET" as any, 1: " rule.mrs ", 2: "DIRECT" });
-    mocks.captures.buttons
-      .find((props) => props.children === "添加规则")
-      .onClick();
-    expect(mocks.store.addCustomRule).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "RULE-SET",
-        value: "rule.mrs",
-      }),
-    );
-    expect(mocks.interactions.ruleAdded).toHaveBeenCalledWith({
-      source: "manual",
-      kind: "unknown",
-    });
 
     const stale = renderRules(
       {

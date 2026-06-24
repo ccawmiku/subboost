@@ -104,6 +104,11 @@ describe("parsePlatformProxyLine", () => {
         sections: new Map([["WireGuard Bad", ["peer = (public-key = public)"]]]),
       })
     ).toThrow("WireGuard section Bad 缺少有效 endpoint");
+    expect(() =>
+      parsePlatformProxyLine("Empty WG = wireguard, section-name=Empty", {
+        sections: new Map([["WireGuard Empty", []]]),
+      })
+    ).toThrow("未找到 WireGuard section: Empty");
   });
 
   it("normalizes AnyTLS fields and rejects unsupported platform-only variants", () => {
@@ -153,6 +158,36 @@ describe("parsePlatformProxyLine", () => {
       name: "AnyTLS Security",
       type: "anytls",
       server: "anytls.example.com",
+    });
+  });
+
+  it("normalizes platform-specific SSH and WireGuard fallback fields", () => {
+    expect(
+      parsePlatformProxyLine(
+        "SSH FP = ssh, ssh.example.com, 22, username=user, password=pass, tls-fingerprint=SHA256:abc"
+      )
+    ).toMatchObject({
+      name: "SSH FP",
+      type: "ssh",
+      server: "ssh.example.com",
+      port: 22,
+    });
+
+    const sections = new Map<string, string[]>([
+      [
+        "WireGuard Minimal",
+        [
+          "private-key = private",
+          'peer = (endpoint = "wg-minimal.example.com:51820")',
+        ],
+      ],
+    ]);
+    expect(parsePlatformProxyLine("Minimal = wireguard, section-name=Minimal", { sections })).toMatchObject({
+      name: "Minimal",
+      type: "wireguard",
+      server: "wg-minimal.example.com",
+      port: 51820,
+      udp: true,
     });
   });
 
@@ -209,6 +244,17 @@ describe("parsePlatformProxyLine", () => {
       "Surge WireGuard 缺少 section-name"
     );
     expect(parsePlatformProxyLine('WG Broken = wireguard, private-key=private, peers=[{public-key=public}]')).toBeNull();
+    expect(parsePlatformProxyLine('WG BadPort = wireguard, private-key=private, peers=[{endpoint="wg-bad.example.com:70000"}]')).toBeNull();
+    expect(
+      parsePlatformProxyLine(
+        'WG NoReserved = wireguard, private-key=private, peers=[{endpoint="wg-no-reserved.example.com:51820", reserved="[]"}]'
+      )
+    ).toMatchObject({
+      name: "WG NoReserved",
+      type: "wireguard",
+      server: "wg-no-reserved.example.com",
+      port: 51820,
+    });
   });
 
   it("parses Loon VLESS and Hysteria2 options", () => {
@@ -300,6 +346,14 @@ describe("parsePlatformProxyLine", () => {
       username: "user",
       password: "pass",
       tls: true,
+    });
+    expect(
+      parsePlatformProxyLine("http=http-plain.example.com:8080, username=user, password=pass, tag=QX HTTP Plain")
+    ).toMatchObject({
+      name: "QX HTTP Plain",
+      type: "http",
+      server: "http-plain.example.com",
+      port: 8080,
     });
   });
 

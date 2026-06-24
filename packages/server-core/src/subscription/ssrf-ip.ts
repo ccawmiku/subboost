@@ -51,6 +51,13 @@ function isPrivateOrReservedIPv4(ip: string): boolean {
   return false;
 }
 
+function isBenchmarkReservedIPv4(ip: string): boolean {
+  const ipInt = ipv4ToInt(ip);
+  const baseInt = ipv4ToInt("198.18.0.0");
+  if (ipInt === null || baseInt === null) return false;
+  return ipv4InCidr(ipInt, baseInt, 15);
+}
+
 function ipv4FromMappedHexTail(value: string): string | null {
   const parts = value.split(":");
   if (parts.length !== 2) return null;
@@ -104,4 +111,33 @@ export function isPrivateOrReservedIp(hostname: string): boolean {
   if (version === 4) return isPrivateOrReservedIPv4(hostname);
   if (version === 6) return isPrivateOrReservedIPv6(hostname);
   return false;
+}
+
+export function isBenchmarkReservedIp(hostname: string): boolean {
+  const version = isIP(hostname);
+  if (version === 4) return isBenchmarkReservedIPv4(hostname);
+  return false;
+}
+
+export function normalizeResolvedIpAddresses(addresses: readonly string[]): string[] {
+  return addresses
+    .map((ip) => (typeof ip === "string" ? ip.trim() : ""))
+    .filter(Boolean);
+}
+
+export function shouldRecheckFakeIpDnsAnswers(addresses: readonly string[]): boolean {
+  const normalized = normalizeResolvedIpAddresses(addresses);
+  const unsafe = normalized.filter((ip) => isPrivateOrReservedIp(ip));
+  return unsafe.length > 0 && unsafe.every((ip) => isBenchmarkReservedIp(ip));
+}
+
+export function selectDnsAddressesAfterFakeIpRecheck(
+  systemAddresses: readonly string[],
+  recheckAddresses: readonly string[]
+): string[] {
+  const normalizedSystemAddresses = normalizeResolvedIpAddresses(systemAddresses);
+  if (!shouldRecheckFakeIpDnsAnswers(normalizedSystemAddresses)) return normalizedSystemAddresses;
+
+  const normalizedRecheckAddresses = normalizeResolvedIpAddresses(recheckAddresses);
+  return normalizedRecheckAddresses.length > 0 ? normalizedRecheckAddresses : normalizedSystemAddresses;
 }

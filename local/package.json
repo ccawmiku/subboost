@@ -1,6 +1,6 @@
 {
   "name": "@subboost/local",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "clean": "node scripts/clean-next.cjs",
-    "dev": "next dev --webpack -H 127.0.0.1 -p 3001",
+    "dev": "next dev --turbopack -H 127.0.0.1 -p 3001",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "prelint": "node scripts/ensure-root-node-modules.cjs",

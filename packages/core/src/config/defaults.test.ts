@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SUBBOOST_TEMPLATE_CONFIG_SCHEMA } from "@subboost/core/templates/config-template";
+import { SUBBOOST_TEMPLATE_CONFIG_SCHEMA } from "../templates/config-template";
 import {
   DEFAULT_BASE_CONFIG_YAML,
   DEFAULT_SUBBOOST_CONFIG,
@@ -33,7 +33,6 @@ describe("default config builders", () => {
     const patch = buildDefaultBaseConfigPatch({
       mixedPort: 12345,
       allowLan: false,
-      includeGlobalClientFingerprint: true,
     });
 
     expect(patch).toMatchObject({
@@ -41,7 +40,6 @@ describe("default config builders", () => {
       "allow-lan": false,
       mode: "rule",
       "log-level": "info",
-      "global-client-fingerprint": "chrome",
       profile: {
         "store-selected": true,
         "store-fake-ip": false,
@@ -59,7 +57,6 @@ describe("default config builders", () => {
       "mixed-port": DEFAULT_SUBBOOST_CONFIG.mixedPort,
       "allow-lan": DEFAULT_SUBBOOST_CONFIG.allowLan,
     });
-    expect(defaultPatch).not.toHaveProperty("global-client-fingerprint");
   });
 
   it("builds the full SubBoost template config with empty user customization fields", () => {
@@ -70,12 +67,12 @@ describe("default config builders", () => {
       template: "full",
       hiddenProxyGroups: [],
       customProxyGroups: [],
-      filteredProxyGroups: [],
-      moduleRuleOverrides: {},
-      moduleRuleExclusions: {},
+      proxyGroupAdvanced: {},
+      proxyGroupAdvancedModeEnabled: false,
+      customRuleSets: [],
+      builtinRuleEdits: {},
       customRules: [],
       ruleOrder: [],
-      allRulesOrderEditingEnabled: false,
       dialerProxyGroups: [],
       proxyGroupNameOverrides: {},
       mixedPort: DEFAULT_SUBBOOST_CONFIG.mixedPort,
@@ -90,7 +87,6 @@ describe("default config builders", () => {
   it("keeps the default YAML example aligned with important base defaults", () => {
     expect(DEFAULT_BASE_CONFIG_YAML).toContain(`mixed-port: ${DEFAULT_SUBBOOST_CONFIG.mixedPort}`);
     expect(DEFAULT_BASE_CONFIG_YAML).toContain(`allow-lan: ${DEFAULT_SUBBOOST_CONFIG.allowLan}`);
-    expect(DEFAULT_BASE_CONFIG_YAML).toContain("global-client-fingerprint: chrome");
     expect(DEFAULT_BASE_CONFIG_YAML).toContain("sniffer:");
     expect(DEFAULT_BASE_CONFIG_YAML).toContain("QUIC: {ports: [443, 8443]}");
   });

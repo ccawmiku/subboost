@@ -1,21 +1,21 @@
 import { expect } from "vitest";
-import { getModulesForTemplate } from "@subboost/core/generator/proxy-groups";
+import { getModulesForTemplate } from "../generator/proxy-groups";
 import {
   SUBBOOST_TEMPLATE_CONFIG_SCHEMA,
   validateSubBoostTemplateConfig,
-} from "@subboost/core/templates/config-template";
+} from "./config-template";
 import type { SubBoostTemplateConfig } from "@subboost/core/types/template-config";
 
-export function validConfig(patch: Partial<SubBoostTemplateConfig> = {}): SubBoostTemplateConfig {
+export function validConfig(patch: Partial<SubBoostTemplateConfig> & Record<string, unknown> = {}): SubBoostTemplateConfig {
   return {
     schema: SUBBOOST_TEMPLATE_CONFIG_SCHEMA,
     template: "minimal",
     enabledProxyGroups: getModulesForTemplate("minimal"),
     hiddenProxyGroups: [],
     customProxyGroups: [],
-    filteredProxyGroups: [],
-    moduleRuleOverrides: {},
-    moduleRuleExclusions: {},
+    proxyGroupAdvanced: {},
+    customRuleSets: [],
+    builtinRuleEdits: {},
     customRules: [],
     ruleOrder: [],
     dialerProxyGroups: [],
@@ -29,9 +29,9 @@ export function validConfig(patch: Partial<SubBoostTemplateConfig> = {}): SubBoo
     cnIpNoResolve: true,
     experimentalCnUseCnRuleSet: true,
     ...patch,
-  };
+  } as SubBoostTemplateConfig;
 }
 
-export function expectInvalid(patch: Partial<SubBoostTemplateConfig>, error: string) {
+export function expectInvalid(patch: Partial<SubBoostTemplateConfig> & Record<string, unknown>, error: string) {
   expect(validateSubBoostTemplateConfig(validConfig(patch))).toEqual({ ok: false, error });
 }

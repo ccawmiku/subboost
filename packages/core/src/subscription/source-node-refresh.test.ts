@@ -56,6 +56,12 @@ describe("source node refresh helpers", () => {
       name: "Plain",
       [ORIGIN_NAME_KEY]: "Plain",
     });
+
+    const [blank] = prepareSourceParsedNodes([ssNode("   ")], {});
+    expect(blank).toMatchObject({
+      name: "",
+      [ORIGIN_NAME_KEY]: "",
+    });
   });
 
   it("detaches a source id while preserving nodes still owned by other sources", () => {
@@ -277,6 +283,64 @@ describe("source node refresh helpers", () => {
     });
   });
 
+  it("does not let one legacy deleted origin hide an entire duplicate-origin batch", () => {
+    const parsed = prepareSourceParsedNodes(
+      [
+        ssNode("SOCKS-same.example.com:1080", { server: "same.example.com", port: 1080, password: "one" }),
+        ssNode("SOCKS-same.example.com:1080", { server: "same.example.com", port: 1080, password: "two" }),
+      ],
+      {}
+    );
+
+    const result = mergeParsedSourceNodes([], parsed, ["SOCKS-same.example.com:1080"], {
+      sourceId: "source-a",
+    });
+
+    expect(result.nodes.map((node) => node.name)).toEqual([
+      "SOCKS-same.example.com:1080",
+      "SOCKS-same.example.com:1080 (2)",
+    ]);
+    expect(result.nodes).toEqual([
+      expect.objectContaining({ [SOURCE_IDS_KEY]: ["source-a"], password: "one" }),
+      expect.objectContaining({ [SOURCE_IDS_KEY]: ["source-a"], password: "two" }),
+    ]);
+  });
+
+  it("still skips exact deleted nodes inside a duplicate-origin batch", () => {
+    const deletedNode = ssNode("SOCKS-same.example.com:1080", {
+      server: "same.example.com",
+      port: 1080,
+      password: "one",
+      [ORIGIN_NAME_KEY]: "SOCKS-same.example.com:1080",
+    });
+    const parsed = prepareSourceParsedNodes(
+      [
+        ssNode("SOCKS-same.example.com:1080", { server: "same.example.com", port: 1080, password: "one" }),
+        ssNode("SOCKS-same.example.com:1080", { server: "same.example.com", port: 1080, password: "two" }),
+      ],
+      {}
+    );
+
+    const result = mergeParsedSourceNodes([], parsed, ["SOCKS-same.example.com:1080"], {
+      sourceId: "source-a",
+      deletedNodes: [
+        {
+          originName: "SOCKS-same.example.com:1080",
+          name: "SOCKS-same.example.com:1080",
+          node: deletedNode,
+        },
+      ],
+    });
+
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        name: "SOCKS-same.example.com:1080",
+        [SOURCE_IDS_KEY]: ["source-a"],
+        password: "two",
+      }),
+    ]);
+  });
+
   it("smart-matches existing manual nodes by content and preserves source id order", () => {
     const state = [
       ssNode("Manual Existing", {
@@ -310,6 +374,184 @@ describe("source node refresh helpers", () => {
       server: "content.example.com",
       [ORIGIN_NAME_KEY]: "Fresh Content",
       [SOURCE_IDS_KEY]: ["source-a"],
+    });
+  });
+
+  it("honors display-name deleted markers and exact deleted-node descriptors", () => {
+    const deleted = ssNode("Deleted Origin", {
+      server: "deleted.example.com",
+      [ORIGIN_NAME_KEY]: "Deleted Origin",
+    });
+    const parsed = prepareSourceParsedNodes(
+      [
+        ssNode("Origin A", { server: "a.example.com" }),
+        deleted,
+        ssNode("Origin C", { server: "c.example.com" }),
+      ],
+      { currentTag: "New", currentNameTemplate: "{tag}-{name}" }
+    );
+
+    const result = mergeParsedSourceNodes([], parsed, ["New-Origin A"], {
+      sourceId: "source-a",
+      deletedNodes: [
+        { node: undefined },
+        { originName: "Deleted Origin", node: deleted },
+      ],
+    });
+
+    expect(result.nodes.map((node) => node.name)).toEqual(["New-Origin C"]);
+  });
+
+  it("uses deleted-node fallback origin metadata and ignores blank fresh origins", () => {
+    const deletedByNodeOrigin = ssNode("Deleted By Node", {
+      server: "deleted-by-node.example.com",
+      [ORIGIN_NAME_KEY]: "Deleted By Node",
+    });
+    const parsed = prepareSourceParsedNodes(
+      [
+        deletedByNodeOrigin,
+        ssNode("   ", { server: "blank-origin.example.com" }),
+        ssNode("Kept", { server: "kept.example.com" }),
+      ],
+      {}
+    );
+
+    const result = mergeParsedSourceNodes([], parsed, [], {
+      sourceId: "source-a",
+      deletedNodes: [
+        { originName: 1, node: deletedByNodeOrigin },
+        { name: "ignored", node: ssNode("   ") },
+      ],
+    });
+
+    expect(result.nodes.map((node) => node.name)).toEqual(["Kept"]);
+  });
+
+  it("avoids display-name fallback across different node types and records fixed-name collisions", () => {
+    const parsed = prepareSourceParsedNodes([ssNode("Shared Name", { server: "fresh-shared.example.com" })], {});
+    const noSameType = mergeParsedSourceNodes(
+      [
+        ssNode("Shared Name", {
+          type: "trojan",
+          password: "secret",
+          server: "manual-trojan.example.com",
+          [ORIGIN_NAME_KEY]: "Other Origin",
+        }),
+      ],
+      parsed,
+      [],
+      { sourceId: "source-a" }
+    );
+
+    expect(noSameType.nodes.map((node) => node.name)).toEqual(["Shared Name", "Shared Name (2)"]);
+
+    const renamed = mergeParsedSourceNodes(
+      [
+        ssNode("Keep", { [ORIGIN_NAME_KEY]: "Keep", [SOURCE_IDS_KEY]: ["source-a"] }),
+        ssNode("Keep", { [ORIGIN_NAME_KEY]: "Other", [SOURCE_IDS_KEY]: ["source-b"] }),
+      ],
+      prepareSourceParsedNodes([ssNode("Keep")], {}),
+      [],
+      { sourceId: "source-a", lastNameTemplate: "{name}", currentNameTemplate: "{name}" }
+    );
+
+    expect(renamed.nodes.map((node) => node.name)).toEqual(["Keep (2)", "Keep"]);
+    expect(Array.from(renamed.renameMap.entries())).toEqual([["Keep", "Keep (2)"]]);
+  });
+
+  it("consumes one matching fresh node and merges unowned base nodes by content", () => {
+    const state = [
+      ssNode("Manual One", {
+        server: "same-origin.example.com",
+        [ORIGIN_NAME_KEY]: "Shared Origin",
+      }),
+      ssNode("Manual Two", {
+        server: "same-origin.example.com",
+        [ORIGIN_NAME_KEY]: "Shared Origin",
+      }),
+      ssNode("Other Source", {
+        server: "content-match.example.com",
+        [ORIGIN_NAME_KEY]: "Fresh Content",
+        [SOURCE_IDS_KEY]: ["source-b"],
+      }),
+    ];
+    const parsed = prepareSourceParsedNodes(
+      [
+        ssNode("Shared Origin", { server: "same-origin.example.com" }),
+        ssNode("Fresh Content", { server: "content-match.example.com" }),
+      ],
+      {}
+    );
+
+    const result = mergeParsedSourceNodes(state, parsed, [], {
+      sourceId: "source-a",
+    });
+
+    expect(result.nodes.map((node) => node.name)).toEqual(["Manual One", "Other Source"]);
+    expect(result.nodes[0]).toMatchObject({
+      [SOURCE_IDS_KEY]: ["source-a"],
+    });
+    expect(result.nodes[1]).toMatchObject({
+      [ORIGIN_NAME_KEY]: "Fresh Content",
+      [SOURCE_IDS_KEY]: ["source-b", "source-a"],
+    });
+  });
+
+  it("matches display names while cleaning source ids from refreshed records", () => {
+    const parsed = [
+      ssNode("Same Display", { server: "fresh-display.example.com" }),
+      {
+        name: undefined,
+        type: "ss",
+        server: "fresh-origin.example.com",
+        port: 8388,
+        cipher: "aes-128-gcm",
+        password: "secret",
+        [ORIGIN_NAME_KEY]: "Header Only",
+      } as unknown as ParsedNode,
+    ];
+    const result = mergeParsedSourceNodes(
+      [
+        ssNode("Same Display", {
+          server: "old-display.example.com",
+          [ORIGIN_NAME_KEY]: "Old Origin",
+        }),
+        ssNode("Keep Source Name", {
+          server: "old-origin.example.com",
+          [ORIGIN_NAME_KEY]: "Header Only",
+          [SOURCE_IDS_KEY]: ["source-b", "source-b", "", "source-a"],
+        }),
+      ],
+      parsed,
+      [],
+      {
+        sourceId: "source-a",
+        deletedNodes: [
+          {
+            node: {
+              name: "",
+              type: "ss",
+              server: "blank.example.com",
+              port: 8388,
+              cipher: "aes-128-gcm",
+              password: "secret",
+              [ORIGIN_NAME_KEY]: "",
+            } as unknown as ParsedNode,
+          },
+        ],
+      }
+    );
+
+    expect(result.nodes.map((node) => node.name)).toEqual(["Same Display", "Keep Source Name"]);
+    expect(result.nodes[0]).toMatchObject({
+      server: "fresh-display.example.com",
+      [ORIGIN_NAME_KEY]: "Same Display",
+      [SOURCE_IDS_KEY]: ["source-a"],
+    });
+    expect(result.nodes[1]).toMatchObject({
+      server: "fresh-origin.example.com",
+      [ORIGIN_NAME_KEY]: "Header Only",
+      [SOURCE_IDS_KEY]: ["source-b", "source-a"],
     });
   });
 });

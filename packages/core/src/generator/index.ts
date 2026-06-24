@@ -21,13 +21,19 @@ import {
 import { DEFAULT_DNS_CONFIG } from "./dns";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
 import type { ParsedNode } from "@subboost/core/types/node";
-import type { ClashConfig, UserConfig, TemplateType, ProxyGroup } from "@subboost/core/types/config";
-import type { CustomProxyGroup } from "@subboost/core/types/config";
-import type { DialerProxyGroup, ModuleRuleOverride } from "@subboost/core/types/template-config";
-import type { FilteredProxyGroup } from "@subboost/core/types/filtered-proxy-group";
+import type {
+  BuiltinRuleEdits,
+  ClashConfig,
+  CustomProxyGroup,
+  CustomRuleSet,
+  ProxyGroup,
+  ProxyGroupAdvancedConfig,
+  TemplateType,
+  UserConfig,
+} from "@subboost/core/types/config";
+import type { DialerProxyGroup } from "@subboost/core/types/template-config";
 import { collectDnsPolicyEntries, configToYaml } from "./yaml";
-import type { ModuleRuleExclusions } from "./module-rules";
-import { isMihomoSupportedProxyNode, normalizeMihomoVlessForGeneration } from "@subboost/core/mihomo/proxy-sanitizer";
+import { isMihomoSupportedProxyNode, normalizeMihomoVlessForGeneration } from "../mihomo/proxy-sanitizer";
 import { chooseFallbackPolicyTarget, withBuiltinPolicyTargets } from "./policy-targets";
 
 export interface GenerateOptions {
@@ -37,16 +43,14 @@ export interface GenerateOptions {
   userConfig?: Partial<UserConfig>;
   dialerProxyGroups?: DialerProxyGroup[];
   customProxyGroups?: CustomProxyGroup[];
-  filteredProxyGroups?: FilteredProxyGroup[];
-  moduleRuleOverrides?: Record<string, ModuleRuleOverride[]>;
-  moduleRuleExclusions?: ModuleRuleExclusions;
+  customRuleSets?: CustomRuleSet[];
+  proxyGroupAdvanced?: Record<string, ProxyGroupAdvancedConfig>;
+  builtinRuleEdits?: BuiltinRuleEdits;
   proxyGroupNameOverrides?: Record<string, string>;
   proxyGroupOrder?: string[];
 }
 
-type BaseConfig = Record<string, unknown> & {
-  "global-client-fingerprint"?: unknown;
-};
+type BaseConfig = Record<string, unknown>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -105,7 +109,11 @@ function assertNoGeneratedSectionsInBaseConfig(baseConfig: Record<string, unknow
 }
 
 function omitGeneratedSections(baseConfig: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(baseConfig).filter(([key, value]) => value !== undefined && !GENERATED_CONFIG_SECTION_KEYS.has(key)));
+  return Object.fromEntries(
+    Object.entries(baseConfig).filter(
+      ([key, value]) => value !== undefined && !GENERATED_CONFIG_SECTION_KEYS.has(key)
+    )
+  );
 }
 
 function normalizeBaseConfigPatch(baseConfig: Record<string, unknown>): Record<string, unknown> {
@@ -175,9 +183,9 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
     userConfig = {},
     dialerProxyGroups = [],
     customProxyGroups = [],
-    filteredProxyGroups = [],
-    moduleRuleOverrides,
-    moduleRuleExclusions,
+    customRuleSets = [],
+    proxyGroupAdvanced = {},
+    builtinRuleEdits,
     proxyGroupNameOverrides,
   } = options;
   
@@ -202,9 +210,7 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
   assertNoGeneratedSectionsInBaseConfig(baseConfig);
   const baseConfigRecord = baseConfig as unknown as Record<string, unknown>;
   const shouldUseDefaultBaseSections = !hasExplicitBaseConfigYaml;
-
-  // mihomo 已将 global-client-fingerprint 标记为 deprecated；这里规范化到每个 proxy 的 client-fingerprint。
-  const globalClientFingerprint =
+  const baseConfigClientFingerprint =
     typeof baseConfigRecord["global-client-fingerprint"] === "string" && baseConfigRecord["global-client-fingerprint"].trim()
       ? String(baseConfigRecord["global-client-fingerprint"]).trim()
       : undefined;
@@ -215,26 +221,20 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
     if (!node || typeof node !== "object") return node;
     const typed = node as unknown as Record<string, unknown>;
     const type = typeof typed.type === "string" ? typed.type : "";
-
     const hasClientFingerprint =
       typeof typed["client-fingerprint"] === "string" && Boolean(String(typed["client-fingerprint"]).trim());
     const supportsClientFingerprint = type === "vmess" || type === "vless" || type === "trojan" || type === "anytls";
-
-    const nextBase = (() => {
-      if (!supportsClientFingerprint) return typed;
-      if (hasClientFingerprint) return typed;
-      if (!globalClientFingerprint) return typed;
-
-      // 根据官方文档：client-fingerprint 仅对 VMess/VLESS/Trojan/AnyTLS 生效；其中 Trojan/AnyTLS 为 TLS 协议。
-      const shouldApply =
-        type === "trojan" ||
+    const shouldApplyBaseFingerprint =
+      Boolean(baseConfigClientFingerprint) &&
+      supportsClientFingerprint &&
+      !hasClientFingerprint &&
+      (type === "trojan" ||
         type === "anytls" ||
         (typeof typed.tls === "boolean" && typed.tls) ||
-        (type === "vless" && Boolean(typed["reality-opts"]));
-
-      if (!shouldApply) return typed;
-      return { ...typed, "client-fingerprint": globalClientFingerprint };
-    })();
+        (type === "vless" && Boolean(typed["reality-opts"])));
+    const nextBase = shouldApplyBaseFingerprint
+      ? { ...typed, "client-fingerprint": baseConfigClientFingerprint }
+      : typed;
 
     if (type !== "vless") return nextBase as unknown as ParsedNode;
     return normalizeMihomoVlessForGeneration(nextBase) as unknown as ParsedNode;
@@ -283,18 +283,20 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
   };
 
   const nodeNameSet = new Set(uniqueNodes.map((n) => n.name));
-  const filteredGroupNameSet = new Set<string>(
-    filteredProxyGroups.filter((g) => g && g.enabled && typeof g.name === "string" && g.name.trim()).map((g) => g.name.trim())
-  );
+  const activeCustomProxyGroups = customProxyGroups.filter((g) => g && g.enabled !== false);
   const customGroupNameSet = new Set<string>(
-    customProxyGroups.filter((g) => g && typeof g.name === "string" && g.name.trim()).map((g) => g.name.trim())
+    activeCustomProxyGroups.filter((g) => g && typeof g.name === "string" && g.name.trim()).map((g) => g.name.trim())
   );
   const moduleGroupNameSet = new Set<string>(
     PROXY_GROUP_MODULES.map((mod) => resolveProxyGroupModuleName(mod, proxyGroupNameOverrides?.[mod.id]))
   );
   const enabledDialerProxyGroups = dialerProxyGroups.filter((g) => g && g.enabled !== false);
   const sanitizedDialerProxyGroups = enabledDialerProxyGroups.length > 0
-    ? sanitizeDialerProxyGroups(enabledDialerProxyGroups, nodeNameSet, filteredGroupNameSet)
+    ? sanitizeDialerProxyGroups(
+        enabledDialerProxyGroups,
+        nodeNameSet,
+        new Set([...moduleGroupNameSet, ...customGroupNameSet])
+      )
     : [];
 
   // 应用 dialer-proxy 到目标节点（基于最终输出的唯一节点名）
@@ -306,7 +308,6 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
     ...nodeNameSet,
     ...proxyProviderNames,
     ...moduleGroupNameSet,
-    ...filteredGroupNameSet,
     ...customGroupNameSet,
     ...sanitizedDialerProxyGroups.map((g) => g.name.trim()).filter(Boolean),
   ]);
@@ -354,9 +355,9 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
     testUrl: config.testUrl,
     testInterval: config.testInterval,
     customProxyGroups,
-    filteredProxyGroups,
-    moduleRuleOverrides,
-    moduleRuleExclusions,
+    customRuleSets,
+    proxyGroupAdvanced,
+    builtinRuleEdits,
     cnIpNoResolve: config.cnIpNoResolve,
     experimentalCnUseCnRuleSet: config.experimentalCnUseCnRuleSet,
     proxyGroupNameOverrides,
@@ -414,17 +415,10 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
     }
 
     const customNameToKey = new Map<string, string>();
-    for (const g of customProxyGroups) {
+    for (const g of activeCustomProxyGroups) {
       const name = typeof g.name === "string" ? g.name.trim() : "";
       if (!name) continue;
       customNameToKey.set(name, `custom:${g.id}`);
-    }
-
-    const filteredNameToKey = new Map<string, string>();
-    for (const g of filteredProxyGroups) {
-      const name = typeof g.name === "string" ? g.name.trim() : "";
-      if (!name) continue;
-      filteredNameToKey.set(name, `filtered:${g.id}`);
     }
 
     const dialerNameToKey = new Map<string, string>();
@@ -437,7 +431,6 @@ export function generateClashConfig(options: GenerateOptions): ClashConfig {
     const getKeyByName = (name: string) => {
       return (
         dialerNameToKey.get(name) ||
-        filteredNameToKey.get(name) ||
         customNameToKey.get(name) ||
         moduleNameToKey.get(name) ||
         `name:${name}`

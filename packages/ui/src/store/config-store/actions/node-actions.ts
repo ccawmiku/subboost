@@ -64,7 +64,10 @@ export function createNodeActions(
         }
         const deletedNodes = [
           ...state.deletedNodes.filter(
-            (n) => n && typeof n.originName === "string" && n.originName !== originName
+            (n) =>
+              n &&
+              typeof n.originName === "string" &&
+              (n.originName !== originName || n.name !== displayName)
           ),
           {
             originName,

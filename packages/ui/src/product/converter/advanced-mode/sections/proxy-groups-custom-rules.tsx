@@ -14,6 +14,7 @@ import {
 import { Switch } from "@subboost/ui/components/ui/switch";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
+import { resolveProxyGroupTargetName } from "@subboost/core/proxy-group-targets";
 import {
   createCustomRuleId,
   CUSTOM_RULE_TYPES,
@@ -48,7 +49,6 @@ const CUSTOM_RULE_TYPE_LABELS: Record<CustomRule["type"], string> = {
   "PROCESS-NAME": "进程名 (PROCESS-NAME)",
   "DST-PORT": "目标端口 (DST-PORT)",
   "SRC-PORT": "源端口 (SRC-PORT)",
-  "RULE-SET": "规则集 (RULE-SET)",
 };
 
 const CUSTOM_RULE_TYPE_SHORT_LABELS: Record<CustomRule["type"], string> = {
@@ -62,7 +62,6 @@ const CUSTOM_RULE_TYPE_SHORT_LABELS: Record<CustomRule["type"], string> = {
   "PROCESS-NAME": "进程名",
   "DST-PORT": "目标端口",
   "SRC-PORT": "源端口",
-  "RULE-SET": "规则集",
 };
 
 const CUSTOM_RULE_TYPE_OPTIONS = CUSTOM_RULE_TYPES.map((value) => ({
@@ -98,7 +97,6 @@ export function ProxyGroupsCustomRules() {
     removeCustomRule,
     enabledProxyGroups,
     customProxyGroups,
-    filteredProxyGroups,
     proxyGroupNameOverrides,
   } = useConfigStore();
 
@@ -124,19 +122,32 @@ export function ProxyGroupsCustomRules() {
     for (const g of customProxyGroups) {
       names.push(g.name);
     }
-    for (const g of filteredProxyGroups) {
-      if (!g || !g.enabled) continue;
-      const name = typeof g.name === "string" ? g.name.trim() : "";
-      if (!name) continue;
-      names.push(name);
-    }
     return names;
   }, [
     customProxyGroups,
     enabledProxyGroups,
-    filteredProxyGroups,
     proxyGroupNameOverrides,
   ]);
+
+  const moduleNames = React.useMemo(
+    () =>
+      Object.fromEntries(
+        PROXY_GROUP_MODULES.map((module) => [
+          module.id,
+          resolveProxyGroupModuleName(module, proxyGroupNameOverrides?.[module.id]),
+        ]),
+      ),
+    [proxyGroupNameOverrides],
+  );
+
+  const resolveTargetName = React.useCallback(
+    (target: CustomRule["target"]) =>
+      resolveProxyGroupTargetName(target, {
+        moduleNames,
+        customProxyGroups,
+      }),
+    [customProxyGroups, moduleNames],
+  );
 
   const targetOptions = React.useMemo(
     () => getTargetOptions(enabledGroupNames),
@@ -181,7 +192,11 @@ export function ProxyGroupsCustomRules() {
 
   const startEditingRule = (rule: CustomRule) => {
     setEditingRuleId(rule.id);
-    setEditingRuleDraft({ ...rule, noResolve: Boolean(rule.noResolve) });
+    setEditingRuleDraft({
+      ...rule,
+      target: resolveTargetName(rule.target),
+      noResolve: Boolean(rule.noResolve),
+    });
   };
 
   const cancelEditingRule = () => {
@@ -313,7 +328,7 @@ export function ProxyGroupsCustomRules() {
             if (isEditing) {
               const editTargetOptions = getTargetOptions(
                 enabledGroupNames,
-                editingRuleDraft.target,
+                resolveTargetName(editingRuleDraft.target),
               );
 
               return (
@@ -366,7 +381,7 @@ export function ProxyGroupsCustomRules() {
                     </div>
                     <div className={RULE_EDIT_TRAILING_CONTROLS_CLASS}>
                       <Select
-                        value={editingRuleDraft.target}
+                        value={resolveTargetName(editingRuleDraft.target)}
                         onValueChange={(target) =>
                           setEditingRuleDraft((prev) =>
                             prev ? { ...prev, target } : prev,
@@ -444,6 +459,7 @@ export function ProxyGroupsCustomRules() {
                 </div>
               );
             }
+            const ruleTargetName = resolveTargetName(rule.target);
 
             return (
               <div
@@ -451,6 +467,9 @@ export function ProxyGroupsCustomRules() {
                 className="flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px]"
               >
                 <span className="rounded border border-indigo-400/20 bg-indigo-500/10 px-1.5 py-0.5 font-medium text-indigo-200">
+                  自定义
+                </span>
+                <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-medium text-white/55">
                   {rule.type}
                 </span>
                 <span
@@ -467,9 +486,9 @@ export function ProxyGroupsCustomRules() {
                 <ArrowRight className="h-3 w-3 shrink-0 text-white/35" />
                 <span
                   className="max-w-[11rem] truncate rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-white/70"
-                  title={rule.target}
+                  title={ruleTargetName}
                 >
-                  {rule.target}
+                  {ruleTargetName}
                 </span>
                 <div className="ml-auto flex shrink-0 items-center gap-0.5">
                   <button

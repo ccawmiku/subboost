@@ -11,8 +11,10 @@ const mocks = vi.hoisted(() => ({
 
 const stateMock = vi.hoisted(() => ({
   enabled: false,
+  effects: [] as Array<React.EffectCallback>,
   callIndex: 0,
   overrides: {} as Record<number, unknown>,
+  refOverride: undefined as unknown,
   setters: [] as Array<ReturnType<typeof vi.fn>>,
 }));
 
@@ -27,6 +29,19 @@ vi.mock("react", async (importOriginal) => {
     useMemo: (factory: () => unknown, deps?: React.DependencyList) => {
       if (stateMock.enabled) return factory();
       return actual.useMemo(factory, deps ?? []);
+    },
+    useEffect: (effect: React.EffectCallback, deps?: React.DependencyList) => {
+      if (stateMock.enabled) {
+        stateMock.effects.push(effect);
+        return undefined;
+      }
+      return actual.useEffect(effect, deps);
+    },
+    useRef: (initial: unknown) => {
+      if (stateMock.enabled) {
+        return { current: stateMock.refOverride === undefined ? initial : stateMock.refOverride };
+      }
+      return actual.useRef(initial);
     },
     useState: (initial: unknown) => {
       if (!stateMock.enabled) return actual.useState(initial);
@@ -75,10 +90,14 @@ vi.mock("@subboost/core/generator/proxy-groups", () => ({
     service: { name: "服务", order: 1.5 },
     custom: { name: "自定义", order: 2 },
   },
-  PROXY_GROUP_MODULES: [
-    { id: "auto", name: "Auto", category: "core" },
-    { id: "fallback", name: "Fallback", category: "core" },
-  ],
+	  PROXY_GROUP_MODULES: [
+	    { id: "auto", name: "Auto", category: "core", rules: [
+	      { id: "auto-rule", name: "Auto Rule", behavior: "domain", path: "geosite/auto-rule.mrs" },
+	      { id: "moved-rule", name: "Moved Rule", behavior: "domain", path: "geosite/moved-rule.mrs" },
+	    ] },
+	    { id: "fallback", name: "Fallback", category: "core", rules: [] },
+	  ],
+  generateProxyGroups: vi.fn(() => []),
 }));
 vi.mock("@subboost/core/proxy-group-name", () => ({
   resolveProxyGroupModuleName: (module: { name: string }, override?: string) => override || module.name,
@@ -116,11 +135,13 @@ vi.mock("./proxy-groups-module-card", () => ({
 }));
 
 import { ProxyGroupsCategories } from "./proxy-groups-categories";
+import { generateProxyGroups } from "@subboost/core/generator/proxy-groups";
 
 function renderCategories(overrides: Record<number, unknown> = {}) {
   stateMock.enabled = true;
   stateMock.callIndex = 0;
   stateMock.overrides = overrides;
+  stateMock.effects = [];
   stateMock.setters = [];
   mocks.captures.inputs = [];
   mocks.captures.dropdownItems = [];
@@ -139,6 +160,7 @@ function renderCategoryTree(overrides: Record<number, unknown> = {}) {
   stateMock.enabled = true;
   stateMock.callIndex = 0;
   stateMock.overrides = overrides;
+  stateMock.effects = [];
   stateMock.setters = [];
   mocks.captures.inputs = [];
   mocks.captures.dropdownItems = [];
@@ -169,10 +191,14 @@ function collectElements(
 describe("ProxyGroupsCategories", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    stateMock.refOverride = undefined;
     mocks.confirmDialog.mockResolvedValue(true);
     mocks.captures = { inputs: [], dropdownItems: [], moduleCards: [] };
     mocks.store = {
       ruleProviderBaseUrl: "https://rules.example/base/",
+      nodes: [],
+      testUrl: "https://probe.example/204",
+      testInterval: 300,
       setRuleProviderBaseUrl: vi.fn(),
       cnIpNoResolve: false,
       setCnIpNoResolve: vi.fn(),
@@ -183,8 +209,8 @@ describe("ProxyGroupsCategories", () => {
       toggleProxyGroup: vi.fn(),
       hideProxyGroup: vi.fn(),
       restoreHiddenProxyGroup: vi.fn(),
-      moduleRuleOverrides: { auto: [{ id: "extra-1" }] },
-      moduleRuleExclusions: {},
+      customRuleSets: [{ id: "extra-1", name: "Extra", behavior: "domain", path: "geosite/extra-1.mrs", target: "Auto Override" }],
+      builtinRuleEdits: {},
       moduleRuleEditWarningAccepted: false,
       customRules: [{ id: "manual-1", target: "Auto Override" }],
       updateCustomRule: vi.fn(),
@@ -193,22 +219,51 @@ describe("ProxyGroupsCategories", () => {
       removeModuleRule: vi.fn(),
       moveModuleRule: vi.fn(),
       restoreModuleRule: vi.fn(),
+      resetModuleRuleTarget: vi.fn(),
       updateCustomProxyGroup: vi.fn(),
       acceptModuleRuleEditWarning: vi.fn(),
       proxyGroupNameOverrides: { auto: "Auto Override" },
       setProxyGroupNameOverride: vi.fn(),
       clearProxyGroupNameOverride: vi.fn(),
-      customProxyGroups: [{ id: "custom-1", name: "Custom", rules: [] }],
-      filteredProxyGroups: [{ name: "Filtered", enabled: true }],
+      customProxyGroups: [{ id: "custom-1", name: "Custom" }],
       dialerProxyGroups: [{ name: "Dialer" }],
+      proxyGroupAdvanced: {},
+      proxyGroupAdvancedModeEnabled: false,
+      setProxyGroupAdvancedModeEnabled: vi.fn(),
+      updateProxyGroupAdvanced: vi.fn(),
     };
   });
 
-  it("renders visible and hidden modules and forwards basic config changes", () => {
+  it("opens only the custom category by default when custom groups exist", () => {
     renderCategories();
 
+    expect(mocks.captures.customPanelRendered).toBe(true);
+    expect(mocks.captures.moduleCards).toHaveLength(0);
+
+    mocks.store.customProxyGroups = [];
+    renderCategories();
+    expect(mocks.captures.customPanelRendered).toBe(false);
+    expect(mocks.captures.moduleCards).toHaveLength(0);
+  });
+
+  it("applies the custom category default after custom groups appear later", () => {
+    stateMock.refOverride = false;
+    renderCategories({ 0: new Set() });
+    stateMock.effects[0]();
+    expect(stateMock.setters[0]).toHaveBeenCalledWith(expect.any(Function));
+    expect((stateMock.setters[0] as any).lastValue.has("custom")).toBe(true);
+
+    stateMock.refOverride = false;
+    renderCategories({ 0: new Set(["custom"]) });
+    stateMock.effects[0]();
+    expect((stateMock.setters[0] as any).lastValue.has("custom")).toBe(true);
+  });
+
+  it("renders visible and hidden modules and forwards basic config changes", () => {
+    renderCategories({ 0: new Set(["core"]) });
+
     expect(mocks.captures.inputs).toHaveLength(0);
-    expect(renderCategories().html).toContain("https://rules.example/base/");
+    expect(renderCategories({ 0: new Set(["core"]) }).html).toContain("https://rules.example/base/");
     expect(mocks.store.setRuleProviderBaseUrl).not.toHaveBeenCalled();
 
     expect(mocks.captures.moduleCards).toHaveLength(1);
@@ -229,7 +284,7 @@ describe("ProxyGroupsCategories", () => {
   });
 
   it("handles module card actions, confirmations, and rule movement", async () => {
-    const { setters } = renderCategories();
+    const { setters } = renderCategories({ 0: new Set(["core"]) });
     const card = mocks.captures.moduleCards[0];
 
     await card.onToggleEnabled();
@@ -262,6 +317,8 @@ describe("ProxyGroupsCategories", () => {
     expect(mocks.store.updateCustomRule).toHaveBeenCalledWith("manual-1", { target: "Fallback" });
     card.onRestoreRule("rule-a");
     expect(mocks.store.restoreModuleRule).toHaveBeenCalledWith("auto", "rule-a");
+    card.onResetRuleTarget("rule-a");
+    expect(mocks.store.resetModuleRuleTarget).toHaveBeenCalledWith("auto", "rule-a");
 
     card.onChangeCnIpNoResolve(true);
     expect(mocks.store.setCnIpNoResolve).toHaveBeenCalledWith(true);
@@ -270,7 +327,7 @@ describe("ProxyGroupsCategories", () => {
   });
 
   it("renames modules and adds rules to custom groups with duplicate guards", () => {
-    const { setters } = renderCategories({ 1: "auto", 2: "Custom" });
+    const { setters } = renderCategories({ 0: new Set(["core"]), 1: "auto", 2: "Custom" });
     const card = mocks.captures.moduleCards[0];
 
     card.onStartEditing();
@@ -283,40 +340,30 @@ describe("ProxyGroupsCategories", () => {
     card.onCancelEditing();
     expect(setters[1]).toHaveBeenCalledWith(null);
 
-    renderCategories({ 1: "auto", 2: "" });
+    renderCategories({ 0: new Set(["core"]), 1: "auto", 2: "" });
     mocks.captures.moduleCards[0].onCommitEditing();
     expect(mocks.store.clearProxyGroupNameOverride).toHaveBeenCalledWith("auto");
 
-    renderCategories({ 1: "auto", 2: "Auto" });
+    renderCategories({ 0: new Set(["core"]), 1: "auto", 2: "Auto" });
     mocks.captures.moduleCards[0].onCommitEditing();
     expect(mocks.store.clearProxyGroupNameOverride).toHaveBeenCalledWith("auto");
 
-    renderCategories({ 1: "auto", 2: "Unique" });
+    renderCategories({ 0: new Set(["core"]), 1: "auto", 2: "Unique" });
     mocks.captures.moduleCards[0].onCommitEditing();
     expect(mocks.store.setProxyGroupNameOverride).toHaveBeenCalledWith("auto", "Unique");
 
     const customRule = { id: "geo", name: "Geo", behavior: "domain", path: "geo.txt", noResolve: true };
     mocks.captures.moduleCards[0].onAddRuleToCustomGroup("custom-1", customRule);
-    expect(mocks.store.updateCustomProxyGroup).toHaveBeenCalledWith("custom-1", {
-      rules: [
-        {
-          id: "geo",
-          name: "Geo",
-          behavior: "domain",
-          url: "https://rules.example/base/geo.txt",
-          noResolve: true,
-        },
-      ],
-    });
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("custom-1", [customRule]);
 
-    mocks.store.customProxyGroups = [{ id: "custom-1", name: "Custom", rules: [{ id: "geo" }] }];
-    mocks.store.updateCustomProxyGroup.mockClear();
-    renderCategories();
+    mocks.store.customRuleSets = [{ id: "geo", name: "Geo", behavior: "domain", path: "geo.txt", target: "Custom" }];
+    mocks.store.addModuleRules.mockClear();
+    renderCategories({ 0: new Set(["core"]) });
     mocks.captures.moduleCards[0].onAddRuleToCustomGroup("custom-1", customRule);
-    expect(mocks.store.updateCustomProxyGroup).not.toHaveBeenCalled();
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("custom-1", [customRule]);
 
-    mocks.store.customProxyGroups = [{ id: "custom-1", name: "Custom", rules: [] }];
-    renderCategories();
+    mocks.store.customProxyGroups = [{ id: "custom-1", name: "Custom" }];
+    renderCategories({ 0: new Set(["core"]) });
     mocks.captures.moduleCards[0].onAddRuleToCustomGroup("missing", customRule);
     expect(mocks.store.updateCustomProxyGroup).not.toHaveBeenCalled();
 
@@ -327,22 +374,70 @@ describe("ProxyGroupsCategories", () => {
       path: "/geo-off.txt",
       noResolve: false,
     });
-    expect(mocks.store.updateCustomProxyGroup).toHaveBeenCalledWith("custom-1", {
-      rules: [
-        {
-          id: "geo-no-resolve-off",
-          name: "Geo Off",
-          behavior: "domain",
-          url: "https://rules.example/base//geo-off.txt",
-        },
-      ],
+    expect(mocks.store.addModuleRules).toHaveBeenCalledWith("custom-1", [
+      {
+        id: "geo-no-resolve-off",
+        name: "Geo Off",
+        behavior: "domain",
+        path: "/geo-off.txt",
+        noResolve: false,
+      },
+    ]);
+  });
+
+  it("forwards generated counts, moved preset rules, and advanced group changes", () => {
+    mocks.store.nodes = [{ name: "US", type: "ss", server: "us.example.com", port: 8388, cipher: "aes-128-gcm", password: "secret" }];
+    mocks.store.customRuleSets = [
+      { id: "set-1", name: "Set 1", behavior: "domain", path: "geosite/set-1.mrs", target: "Auto Override", noResolve: true },
+    ];
+    mocks.store.builtinRuleEdits = {
+      "module:auto:auto-rule": { enabled: false },
+      "module:auto:moved-rule": { target: "Fallback" },
+      bad: { target: "Fallback" },
+    };
+    mocks.store.proxyGroupAdvanced = { auto: { groupType: "select", strategy: "round-robin" } };
+    vi.mocked(generateProxyGroups).mockReturnValueOnce([
+      { name: "Auto Override", type: "select", proxies: ["US", "DIRECT"] },
+    ] as never);
+
+    renderCategories({ 0: new Set(["core"]) });
+    const card = mocks.captures.moduleCards[0];
+
+    expect(card.nodeCount).toBe(2);
+    expect(card.extraRules).toEqual([
+      { id: "set-1", name: "Set 1", behavior: "domain", path: "geosite/set-1.mrs", noResolve: true },
+    ]);
+    expect(card.hiddenPresetRuleIds.auto).toContain("auto-rule");
+    expect(card.hiddenPresetRuleIds.auto).toContain("moved-rule");
+
+    card.onChangeGroupType({ groupType: "load-balance" });
+    expect(mocks.store.updateProxyGroupAdvanced).toHaveBeenCalledWith("auto", {
+      groupType: "load-balance",
+      strategy: "round-robin",
     });
+    card.onChangeGroupType({ groupType: "fallback", strategy: "consistent-hashing" });
+    expect(mocks.store.updateProxyGroupAdvanced).toHaveBeenCalledWith("auto", {
+      groupType: "fallback",
+      strategy: undefined,
+    });
+
+    mocks.store.proxyGroupAdvanced = { auto: {} };
+    renderCategories({ 0: new Set(["core"]) });
+    mocks.captures.moduleCards[0].onChangeGroupType({ groupType: "load-balance" });
+    expect(mocks.store.updateProxyGroupAdvanced).toHaveBeenCalledWith("auto", {
+      groupType: "load-balance",
+      strategy: "round-robin",
+    });
+
+    const advancedElement = card.renderAdvancedContent(React.createElement("div", null, "rules"), 2);
+    expect(advancedElement.props.target).toEqual({ kind: "module", id: "auto", name: "Auto Override" });
+    advancedElement.props.onChange({ sourceIds: ["source-a"] });
+    expect(mocks.store.updateProxyGroupAdvanced).toHaveBeenCalledWith("auto", { sourceIds: ["source-a"] });
   });
 
   it("renders custom category and disabled non-core module branches", async () => {
     mocks.store.hiddenProxyGroups = [];
     mocks.store.enabledProxyGroups = [];
-    mocks.store.filteredProxyGroups = [{ name: "Filtered", enabled: false }, null, { name: "  ", enabled: true }, { name: 123, enabled: true }];
     mocks.store.dialerProxyGroups = [null, { name: "  " }];
     const { setters } = renderCategories({ 0: new Set(["custom", "core"]) });
     expect(mocks.captures.customPanelRendered).toBe(true);
@@ -357,6 +452,21 @@ describe("ProxyGroupsCategories", () => {
     expect(mocks.store.hideProxyGroup).not.toHaveBeenCalled();
 
     expect(setters[0]).toBeDefined();
+  });
+
+  it("handles unknown rule targets and generated groups without proxy arrays", () => {
+    mocks.store.nodes = [{ name: "US", type: "ss", server: "us.example.com", port: 8388, cipher: "aes-128-gcm", password: "secret" }];
+    mocks.store.customRuleSets = [
+      { id: "unknown-target", name: "Unknown", behavior: "domain", path: "geosite/unknown.mrs", target: "Missing" },
+    ];
+    vi.mocked(generateProxyGroups).mockReturnValueOnce([
+      { name: "Auto Override", type: "select", proxies: "bad" },
+    ] as never);
+
+    renderCategories({ 0: new Set(["core"]) });
+
+    expect(mocks.captures.moduleCards[0].nodeCount).toBe(0);
+    expect(mocks.captures.moduleCards[0].extraRules).toEqual([]);
   });
 
   it("toggles category expansion through the rendered category headers", () => {

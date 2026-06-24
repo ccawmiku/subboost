@@ -2,17 +2,18 @@
 
 import * as React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, ChevronDown, ChevronRight, HelpCircle, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, HelpCircle, Pencil, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Button } from "@subboost/ui/components/ui/button";
+import { Input } from "@subboost/ui/components/ui/input";
 import { Switch } from "@subboost/ui/components/ui/switch";
 import {
   getEffectiveModuleRuleItems,
   getExcludedModuleRuleIds,
-  isModuleRuleMovedFrom,
-  type ModuleRuleExclusions,
+  type HiddenPresetRuleIds,
 } from "@subboost/core/generator/module-rules";
 import type { ProxyGroupModule } from "@subboost/core/generator/proxy-groups";
-import type { CustomProxyGroup, ModuleRuleOverride } from "@subboost/ui/store/config-store";
+import { DEFAULT_LOAD_BALANCE_STRATEGY, type LoadBalanceStrategy } from "@subboost/core/types/config";
+import type { CustomProxyGroup, RuleSetDraft } from "@subboost/ui/store/config-store";
 import { cn } from "@subboost/ui/lib/utils";
 import type {
   CustomRuleListItem,
@@ -25,6 +26,12 @@ import {
   ProxyGroupNameEditor,
 } from "./proxy-group-name-editor";
 import { ProxyGroupSummary } from "./proxy-group-summary";
+import {
+  ProxyGroupTypeMenu,
+  getLoadBalanceStrategyLabel,
+  getProxyGroupTypeLabel,
+  type ProxyGroupTypeMenuValue,
+} from "./proxy-group-type-menu";
 
 function ModuleHintPopover({ moduleId }: { moduleId: string }) {
   const isGemini = moduleId === "gemini";
@@ -94,14 +101,16 @@ export function ProxyGroupsModuleCard({
   onToggleEnabled,
   isEditing,
   editingName,
+  editingDescription,
   onChangeEditingName,
+  onChangeEditingDescription,
   onStartEditing,
   onCancelEditing,
   onCommitEditing,
   onHide,
   extraRules,
-  moduleRuleOverrides,
-  moduleRuleExclusions,
+  ruleSetsByTarget,
+  hiddenPresetRuleIds,
   customProxyGroups,
   manualRules,
   manualRuleTargets,
@@ -120,10 +129,20 @@ export function ProxyGroupsModuleCard({
   onMoveManualRule,
   onRemoveManualRule,
   onRestoreRule,
+  onResetRuleTarget,
   cnIpNoResolve,
   onChangeCnIpNoResolve,
   experimentalCnUseCnRuleSet,
   onChangeExperimentalCnUseCnRuleSet,
+  description,
+  groupType,
+  strategy,
+  onChangeGroupType,
+  rulesContentOverride,
+  rulesCountOverride,
+  advancedMode = false,
+  nodeCount = 0,
+  renderAdvancedContent,
 }: {
   module: ProxyGroupModule;
   display: { full: string };
@@ -132,14 +151,16 @@ export function ProxyGroupsModuleCard({
   onToggleEnabled: () => void;
   isEditing: boolean;
   editingName: string;
+  editingDescription?: string;
   onChangeEditingName: (value: string) => void;
+  onChangeEditingDescription?: (value: string) => void;
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onCommitEditing: () => void;
   onHide: () => void;
-  extraRules: ModuleRuleOverride[];
-  moduleRuleOverrides: Record<string, ModuleRuleOverride[]>;
-  moduleRuleExclusions: ModuleRuleExclusions;
+  extraRules: RuleSetDraft[];
+  ruleSetsByTarget: Record<string, RuleSetDraft[]>;
+  hiddenPresetRuleIds: HiddenPresetRuleIds;
   customProxyGroups: CustomProxyGroup[];
   manualRules: CustomRuleListItem[];
   manualRuleTargets: ProxyGroupRuleTarget[];
@@ -150,62 +171,93 @@ export function ProxyGroupsModuleCard({
   acceptModuleRuleEditWarning: () => void;
   isRulesExpanded: boolean;
   onToggleRulesExpanded: () => void;
-  onAddRules: (rules: ModuleRuleOverride[]) => void;
-  onAddRulesToModule: (moduleId: string, rules: ModuleRuleOverride[]) => void;
-  onAddRuleToCustomGroup: (groupId: string, rule: ModuleRuleOverride) => void;
+  onAddRules: (rules: RuleSetDraft[]) => void;
+  onAddRulesToModule: (moduleId: string, rules: RuleSetDraft[]) => void;
+  onAddRuleToCustomGroup: (groupId: string, rule: RuleSetDraft) => void;
   onRemoveExtraRule: (ruleId: string) => void;
   onMoveRule: (ruleId: string, target: { kind: "module" | "custom"; id: string }) => void;
   onMoveManualRule: (ruleId: string, targetName: string) => void;
   onRemoveManualRule: (index: number) => void;
   onRestoreRule: (ruleId: string) => void;
+  onResetRuleTarget: (ruleId: string) => void;
   cnIpNoResolve: boolean;
   onChangeCnIpNoResolve: (value: boolean) => void;
   experimentalCnUseCnRuleSet: boolean;
   onChangeExperimentalCnUseCnRuleSet: (value: boolean) => void;
+  description?: string;
+  groupType?: ProxyGroupTypeMenuValue;
+  strategy?: LoadBalanceStrategy;
+  onChangeGroupType?: (next: { groupType: ProxyGroupTypeMenuValue; strategy?: LoadBalanceStrategy }) => void;
+  rulesContentOverride?: React.ReactNode;
+  rulesCountOverride?: number;
+  advancedMode?: boolean;
+  nodeCount?: number;
+  renderAdvancedContent?: (rulesContent: React.ReactNode, rulesCount: number) => React.ReactNode;
 }) {
-  const effectiveRules = getEffectiveModuleRuleItems(module, moduleRuleOverrides, moduleRuleExclusions);
-  const excludedRuleIds = getExcludedModuleRuleIds(module.id, moduleRuleExclusions);
+  const effectiveRules = getEffectiveModuleRuleItems(module, ruleSetsByTarget, hiddenPresetRuleIds);
+  const excludedRuleIds = getExcludedModuleRuleIds(module.id, hiddenPresetRuleIds);
   const excludedRules = module.rules.filter((rule) => rule?.id && excludedRuleIds.has(rule.id));
-  const movedCount = excludedRules.filter((rule) =>
-    isModuleRuleMovedFrom(module.id, rule.id, moduleRuleOverrides, customProxyGroups)
-  ).length;
-  const removedCount = excludedRules.length - movedCount;
   const excludedCount = excludedRules.length;
-  const totalRules = effectiveRules.length + manualRules.length;
-  const hasRuleManagement = module.rules.length + extraRules.length + excludedCount + manualRules.length > 0;
-  const ruleDetails = [
-    extraRules.length > 0 ? `+${extraRules.length} 自定义` : "",
-    manualRules.length > 0 ? `+${manualRules.length} 手动` : "",
-    movedCount > 0 ? `已移动 ${movedCount}` : "",
-    removedCount > 0 ? `已移除 ${removedCount}` : "",
-  ].filter(Boolean);
+  const totalRules = rulesCountOverride ?? (effectiveRules.length + manualRules.length);
+  const hasRuleManagement = rulesContentOverride !== undefined
+    ? totalRules > 0
+    : module.rules.length + extraRules.length + excludedCount + manualRules.length > 0;
+  const hasExpandedContent = hasRuleManagement || advancedMode;
   const showGeminiScholarHint = !isEditing && (module.id === "gemini" || module.id === "google-scholar");
-  const canToggleRules = !isEditing && hasRuleManagement;
+  const effectiveGroupType = groupType ?? (module.groupType as ProxyGroupTypeMenuValue);
+  const typeLabel =
+    effectiveGroupType === "load-balance"
+      ? `${getProxyGroupTypeLabel(effectiveGroupType)} / ${getLoadBalanceStrategyLabel(
+          strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
+        )}`
+      : getProxyGroupTypeLabel(effectiveGroupType);
   const summaryItems = [
-    { label: module.description ?? "", tone: "accent" as const },
-    ...(hasRuleManagement
-      ? [
-          {
-            label: `${totalRules} 规则${ruleDetails.length > 0 ? `（${ruleDetails.join("，")}）` : ""}`,
-            tone: "success" as const,
-          },
-        ]
-      : []),
+    { label: description ?? module.description ?? "", tone: "accent" as const },
+    { label: `${totalRules} 规则`, tone: "success" as const },
+    { label: `${nodeCount} 节点`, tone: "muted" as const },
   ];
+  const rulesContent = rulesContentOverride !== undefined ? rulesContentOverride : hasRuleManagement ? (
+    <ProxyGroupsModuleRulesPanel
+      module={module}
+      enabledProxyGroups={enabledProxyGroups}
+      hiddenProxyGroups={hiddenProxyGroups}
+      ruleSetsByTarget={ruleSetsByTarget}
+      hiddenPresetRuleIds={hiddenPresetRuleIds}
+      customProxyGroups={customProxyGroups}
+      manualRules={manualRules}
+      manualRuleTargets={manualRuleTargets}
+      proxyGroupNameOverrides={proxyGroupNameOverrides}
+      moduleRuleEditWarningAccepted={moduleRuleEditWarningAccepted}
+      acceptModuleRuleEditWarning={acceptModuleRuleEditWarning}
+      onAddRules={onAddRules}
+      onAddRulesToModule={onAddRulesToModule}
+      onAddRuleToCustomGroup={onAddRuleToCustomGroup}
+      onRemoveRule={onRemoveExtraRule}
+      onMoveRule={onMoveRule}
+      onMoveManualRule={onMoveManualRule}
+      onRemoveManualRule={onRemoveManualRule}
+      onRestoreRule={onRestoreRule}
+      onResetRuleTarget={onResetRuleTarget}
+      cnIpNoResolve={cnIpNoResolve}
+      onChangeCnIpNoResolve={onChangeCnIpNoResolve}
+      experimentalCnUseCnRuleSet={experimentalCnUseCnRuleSet}
+      onChangeExperimentalCnUseCnRuleSet={onChangeExperimentalCnUseCnRuleSet}
+    />
+  ) : null;
 
   return (
     <div className="overflow-hidden rounded border border-white/10 bg-white/5">
       <div
         className={cn(
           "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-2 py-2",
-          canToggleRules && "cursor-pointer transition-colors hover:bg-white/5"
+          hasExpandedContent && "cursor-pointer transition-colors hover:bg-white/5"
         )}
         onClick={() => {
-          if (canToggleRules) onToggleRulesExpanded();
+          if (hasExpandedContent) onToggleRulesExpanded();
         }}
-        title={canToggleRules ? (isRulesExpanded ? "收起规则集" : "展开规则集") : undefined}
+        title={hasExpandedContent ? (isRulesExpanded ? "收起" : "展开") : undefined}
       >
-        {hasRuleManagement ? (
+        {!isEditing && (hasExpandedContent ? (
           isRulesExpanded ? (
             <ChevronDown className="h-4 w-4 shrink-0 text-white/50" />
           ) : (
@@ -213,25 +265,63 @@ export function ProxyGroupsModuleCard({
           )
         ) : (
           <span className="h-4 w-4 shrink-0" />
-        )}
-        <div className="min-w-0">
+        ))}
+        <div className={cn("min-w-0", isEditing && "col-span-3")}>
           {isEditing ? (
-            <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <ProxyGroupNameEditor
-                value={parseProxyGroupNameDraft(editingName, module.emoji)}
-                onChange={(draft) => onChangeEditingName(buildProxyGroupName(draft))}
-                namePlaceholder="代理组名称"
-                allowEmptyEmoji={false}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") onCommitEditing();
-                  if (e.key === "Escape") onCancelEditing();
-                }}
-              />
-              <Button variant="ghost" size="sm" onClick={onCommitEditing} className="h-7 px-2">
+            <div
+              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className={cn(
+                  "min-w-0",
+                  onChangeEditingDescription
+                    ? "grid grid-cols-[minmax(5.75rem,1fr)_minmax(0,1.42fr)] gap-1"
+                    : "flex-1",
+                )}
+              >
+                <ProxyGroupNameEditor
+                  value={parseProxyGroupNameDraft(editingName, module.emoji)}
+                  onChange={(draft) => onChangeEditingName(buildProxyGroupName(draft))}
+                  namePlaceholder="代理组名称"
+                  allowEmptyEmoji={false}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onCommitEditing();
+                    if (e.key === "Escape") onCancelEditing();
+                  }}
+                />
+                {onChangeEditingDescription && (
+                  <Input
+                    value={editingDescription ?? ""}
+                    placeholder="描述文本（默认: 自定义代理组）"
+                    className="h-7 min-w-0 border-white/10 bg-white/5 text-xs"
+                    onChange={(event) => onChangeEditingDescription(event.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") onCommitEditing();
+                      if (e.key === "Escape") onCancelEditing();
+                    }}
+                  />
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCommitEditing}
+                className="h-7 px-2"
+                title="保存"
+                aria-label="保存"
+              >
                 <Check className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={onCancelEditing} className="h-7 px-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancelEditing}
+                className="h-7 px-2"
+                title="取消"
+                aria-label="取消"
+              >
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -275,6 +365,26 @@ export function ProxyGroupsModuleCard({
               onCheckedChange={onToggleEnabled}
               onClick={(e) => e.stopPropagation()}
             />
+            {onChangeGroupType && (
+              <ProxyGroupTypeMenu
+                value={effectiveGroupType}
+                strategy={strategy}
+                onChange={onChangeGroupType}
+                contentAlign="end"
+                trigger={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 shrink-0 px-2 text-white/35 hover:text-indigo-200"
+                    title={`类型：${typeLabel}`}
+                    aria-label={`修改 ${display.full} 类型`}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -291,33 +401,10 @@ export function ProxyGroupsModuleCard({
         )}
       </div>
 
-      {hasRuleManagement && isRulesExpanded && (
-        <ProxyGroupsModuleRulesPanel
-          module={module}
-          enabledProxyGroups={enabledProxyGroups}
-          hiddenProxyGroups={hiddenProxyGroups}
-          moduleRuleOverrides={moduleRuleOverrides}
-          moduleRuleExclusions={moduleRuleExclusions}
-          customProxyGroups={customProxyGroups}
-          manualRules={manualRules}
-          manualRuleTargets={manualRuleTargets}
-          proxyGroupNameOverrides={proxyGroupNameOverrides}
-          moduleRuleEditWarningAccepted={moduleRuleEditWarningAccepted}
-          acceptModuleRuleEditWarning={acceptModuleRuleEditWarning}
-          onAddRules={onAddRules}
-          onAddRulesToModule={onAddRulesToModule}
-          onAddRuleToCustomGroup={onAddRuleToCustomGroup}
-          onRemoveRule={onRemoveExtraRule}
-          onMoveRule={onMoveRule}
-          onMoveManualRule={onMoveManualRule}
-          onRemoveManualRule={onRemoveManualRule}
-          onRestoreRule={onRestoreRule}
-          cnIpNoResolve={cnIpNoResolve}
-          onChangeCnIpNoResolve={onChangeCnIpNoResolve}
-          experimentalCnUseCnRuleSet={experimentalCnUseCnRuleSet}
-          onChangeExperimentalCnUseCnRuleSet={onChangeExperimentalCnUseCnRuleSet}
-        />
-      )}
+      {isRulesExpanded &&
+        (advancedMode && renderAdvancedContent
+          ? renderAdvancedContent(rulesContent, totalRules)
+          : rulesContent)}
     </div>
   );
 }

@@ -288,6 +288,7 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
             lastTag,
             lastNameTemplate,
             treatAsNewSource,
+            deletedNodes: state.deletedNodes,
           });
 
           const nextNodes = merged.nodes;
@@ -575,19 +576,42 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
 
       setAndGenerateConfig((state) => {
         const deleted = new Set(state.deletedNodeNames);
-        const normalized = uniqueNamedNodes
-          .map((node) => {
+        const normalizedCandidates = uniqueNamedNodes.map((node) => {
+          const record = node as unknown as Record<string, unknown>;
+          const origin =
+            typeof record["_originName"] === "string" && record["_originName"].trim()
+              ? String(record["_originName"])
+              : node.name;
+          return origin === record["_originName"]
+            ? node
+            : ({ ...record, _originName: origin } as unknown as ParsedNode);
+        });
+        const originCounts = new Map<string, number>();
+        for (const node of normalizedCandidates) {
+          const origin = String((node as unknown as Record<string, unknown>)["_originName"] ?? node.name);
+          originCounts.set(origin, (originCounts.get(origin) ?? 0) + 1);
+        }
+        const deletedNodeKeys = new Set<string>();
+        for (const item of state.deletedNodes) {
+          const deletedNode = item?.node;
+          if (!deletedNode) continue;
+          const origin =
+            typeof item.originName === "string" && item.originName.trim()
+              ? item.originName.trim()
+              : String((deletedNode as unknown as Record<string, unknown>)["_originName"] ?? deletedNode.name).trim();
+          if (!origin) continue;
+          deletedNodeKeys.add(buildScopedNodeIdentityKey(origin, deletedNode));
+        }
+
+        const normalized = normalizedCandidates
+          .filter((node) => {
             const record = node as unknown as Record<string, unknown>;
             const origin =
               typeof record["_originName"] === "string" && record["_originName"].trim()
                 ? String(record["_originName"])
                 : node.name;
-            return origin === record["_originName"]
-              ? node
-              : ({ ...record, _originName: origin } as unknown as ParsedNode);
-          })
-          .filter((node) => {
-            const origin = String((node as unknown as Record<string, unknown>)["_originName"] ?? node.name);
+            if (deletedNodeKeys.has(buildScopedNodeIdentityKey(origin, node))) return false;
+            if ((originCounts.get(origin) ?? 0) > 1) return true;
             return !deleted.has(origin);
           });
 

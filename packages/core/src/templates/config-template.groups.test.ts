@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { validateSubBoostTemplateConfig } from "@subboost/core/templates/config-template";
+import { validateSubBoostTemplateConfig } from "./config-template";
 import { expectInvalid, validConfig } from "./config-template.test-helpers";
 
-describe("validateSubBoostTemplateConfig custom and filtered groups", () => {
-  it("rejects invalid custom and filtered group fields", () => {
+describe("validateSubBoostTemplateConfig custom groups", () => {
+  it("rejects invalid custom group fields", () => {
     expectInvalid({ customRules: "bad" as never }, "customRules 必须是数组");
     expectInvalid({ customRules: [1 as never] }, "customRules 只能包含对象");
     expectInvalid(
@@ -88,7 +88,6 @@ describe("validateSubBoostTemplateConfig custom and filtered groups", () => {
             name: "Custom",
             emoji: "C",
             groupType: "select",
-            rules: [],
           },
         ],
       },
@@ -102,7 +101,6 @@ describe("validateSubBoostTemplateConfig custom and filtered groups", () => {
             name: "",
             emoji: "C",
             groupType: "select",
-            rules: [],
           },
         ],
       },
@@ -114,152 +112,34 @@ describe("validateSubBoostTemplateConfig custom and filtered groups", () => {
           {
             id: "custom",
             name: "Custom",
+            emoji: 1 as never,
+            groupType: "select",
+          },
+        ],
+      },
+      "customProxyGroups.emoji 必须是字符串"
+    );
+    expectInvalid(
+      {
+        customProxyGroups: [
+          {
+            id: "custom",
+            name: "Custom",
             emoji: "C",
             groupType: "bad" as never,
-            rules: [],
           },
         ],
       },
       "customProxyGroups.groupType 无效"
     );
+    expectInvalid({ proxyGroupAdvanced: [] as never }, "proxyGroupAdvanced 必须是对象");
     expectInvalid(
       {
-        customProxyGroups: [
-          {
-            id: "custom",
-            name: "Custom",
-            emoji: "C",
-            groupType: "select",
-            rules: "bad" as never,
-          },
-        ],
+        proxyGroupAdvanced: {
+          missing: {},
+        },
       },
-      "customProxyGroups.rules 必须是数组"
-    );
-    expectInvalid(
-      {
-        customProxyGroups: [
-          {
-            id: "custom",
-            name: "Custom",
-            emoji: "C",
-            groupType: "select",
-            rules: [1 as never],
-          },
-        ],
-      },
-      "customProxyGroups.rules 只能包含对象"
-    );
-    expectInvalid(
-      {
-        customProxyGroups: [
-          {
-            id: "custom",
-            name: "Custom",
-            emoji: "C",
-            groupType: "select",
-            rules: [
-              {
-                id: "r",
-                name: "R",
-                behavior: "bad" as never,
-                url: "https://rules.example.com/custom.mrs",
-              },
-            ],
-          },
-        ],
-      },
-      "customProxyGroups.rules.behavior 无效"
-    );
-    expectInvalid(
-      {
-        customProxyGroups: [
-          {
-            id: "custom",
-            name: "Custom",
-            emoji: "C",
-            groupType: "select",
-            rules: [
-              {
-                id: "r",
-                name: "R",
-                behavior: "domain",
-                url: "https://rules.example.com/custom.mrs",
-                noResolve: "yes" as never,
-              },
-            ],
-          },
-        ],
-      },
-      "customProxyGroups.rules.noResolve 必须是布尔值"
-    );
-
-    expectInvalid({ filteredProxyGroups: "bad" as never }, "filteredProxyGroups 必须是数组");
-    expectInvalid({ filteredProxyGroups: [1 as never] }, "filteredProxyGroups 只能包含对象");
-    expectInvalid(
-      {
-        filteredProxyGroups: [
-          {
-            id: "filtered",
-            name: "Filtered",
-            enabled: "yes" as never,
-            groupType: "select",
-            sourceIds: [],
-            regions: [],
-            excludedNodeNames: [],
-          },
-        ],
-      },
-      "filteredProxyGroups.enabled 必须是布尔值"
-    );
-    expectInvalid(
-      {
-        filteredProxyGroups: [
-          {
-            id: "filtered",
-            name: "Filtered",
-            enabled: true,
-            groupType: "bad" as never,
-            sourceIds: [],
-            regions: [],
-            excludedNodeNames: [],
-          },
-        ],
-      },
-      "filteredProxyGroups.groupType 无效"
-    );
-    expectInvalid(
-      {
-        filteredProxyGroups: [
-          {
-            id: "filtered",
-            name: "Filtered",
-            enabled: true,
-            groupType: "select",
-            sourceIds: [1 as never],
-            regions: [],
-            excludedNodeNames: [],
-          },
-        ],
-      },
-      "filteredProxyGroups.sourceIds 只能包含字符串"
-    );
-    expectInvalid(
-      {
-        filteredProxyGroups: [
-          {
-            id: "filtered",
-            name: "Filtered",
-            enabled: true,
-            groupType: "load-balance",
-            strategy: "bad" as never,
-            sourceIds: [],
-            regions: [],
-            excludedNodeNames: [],
-          },
-        ],
-      },
-      "filteredProxyGroups.strategy 无效"
+      "proxyGroupAdvanced 包含未知代理组"
     );
 
     expect(
@@ -270,54 +150,109 @@ describe("validateSubBoostTemplateConfig custom and filtered groups", () => {
               id: "custom",
               name: "Custom",
               emoji: "C",
+              memberSource: "filtered-nodes",
               groupType: "load-balance",
               strategy: "bad" as never,
-              rules: [],
             },
           ],
         })
       )
     ).toEqual({ ok: false, error: "customProxyGroups.strategy 无效" });
 
-    expect(
-      validateSubBoostTemplateConfig(
-        validConfig({
-          customProxyGroups: [
-            {
-              id: "custom",
-              name: "Custom",
-              emoji: "C",
-              groupType: "select",
-              rules: [
-                {
-                  id: "r",
-                  name: "R",
-                  behavior: "domain",
-                  url: "not-url",
-                },
-              ],
-            },
-          ],
-        })
-      )
-    ).toEqual({ ok: false, error: "customProxyGroups.rules.url 必须是 http(s) URL" });
+    expectInvalid(
+      {
+        customProxyGroups: [
+          {
+            id: "custom",
+            name: "Custom",
+            emoji: "C",
+            memberSource: "bad" as never,
+            groupType: "select",
+          },
+        ],
+      },
+      "customProxyGroups.memberSource 无效"
+    );
+    expectInvalid(
+      {
+        customProxyGroups: [
+          {
+            id: "custom",
+            name: "Custom",
+            emoji: "C",
+            includeInGroupMembers: "yes" as never,
+            groupType: "select",
+          },
+        ],
+      },
+      "customProxyGroups.includeInGroupMembers 必须是布尔值"
+    );
 
-    expect(
-      validateSubBoostTemplateConfig(
-        validConfig({
-          filteredProxyGroups: [
-            {
-              id: "filtered",
-              name: "Filtered",
-              enabled: true,
-              groupType: "select",
-              sourceIds: [],
-              regions: ["moon" as never],
-              excludedNodeNames: [],
+    expectInvalid(
+      {
+        customProxyGroups: [
+          {
+            id: "legacy",
+            name: "Legacy",
+            emoji: "L",
+            groupType: "select",
+            rules: [],
+          } as never,
+        ],
+      },
+      "模板配置包含已移除字段: customProxyGroups[0].rules"
+    );
+
+    const validCustomGroup = validateSubBoostTemplateConfig(
+      validConfig({
+        customProxyGroups: [
+          {
+            id: "balance",
+            name: "Balance",
+            emoji: "B",
+            description: "  Media group  ",
+            memberSource: "filtered-nodes",
+            includeInGroupMembers: false,
+            groupType: "load-balance",
+            advanced: {
+              sourceIds: ["source-a"],
             },
-          ],
-        })
-      )
-    ).toEqual({ ok: false, error: "filteredProxyGroups.regions 包含未知地区" });
+          },
+        ],
+      })
+    );
+    expect(validCustomGroup.ok && validCustomGroup.config.customProxyGroups[0]).toMatchObject({
+      advanced: { sourceIds: ["source-a"] },
+      description: "Media group",
+      strategy: "consistent-hashing",
+    });
+
+    const validSelectGroup = validateSubBoostTemplateConfig(
+      validConfig({
+        customProxyGroups: [
+          {
+            id: "manual",
+            name: "Manual",
+            emoji: "",
+            includeInGroupMembers: true,
+            groupType: "select",
+          },
+        ],
+      })
+    );
+    expect(validSelectGroup.ok).toBe(true);
+    if (validSelectGroup.ok) {
+      expect(validSelectGroup.config.customProxyGroups[0]).toEqual({
+        id: "manual",
+        name: "Manual",
+        emoji: "",
+        includeInGroupMembers: true,
+        groupType: "select",
+        advanced: {},
+      });
+    }
+
+    const removedField = `filtered${"ProxyGroups"}`;
+    expectInvalid({ [removedField]: [] } as never, `模板配置包含已移除字段: ${removedField}`);
   });
 });

@@ -1,6 +1,6 @@
 import type { KnownNodeType } from "@subboost/core/types/node";
 import type { ClashConfig } from "@subboost/core/types/config";
-import { sanitizeMihomoProxyNode } from "@subboost/core/mihomo/proxy-sanitizer";
+import { sanitizeMihomoProxyNode } from "../mihomo/proxy-sanitizer";
 
 export type DnsPolicyValue = string | string[];
 

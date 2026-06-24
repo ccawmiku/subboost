@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, ChevronRight, Link as LinkIcon, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Link as LinkIcon, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Badge } from "@subboost/ui/components/ui/badge";
 import { Button } from "@subboost/ui/components/ui/button";
 import { Input } from "@subboost/ui/components/ui/input";
 import { Switch } from "@subboost/ui/components/ui/switch";
 import { toast } from "@subboost/ui/components/ui/toaster";
+import { DEFAULT_LOAD_BALANCE_STRATEGY, type ProxyGroupGroupType } from "@subboost/core/types/config";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
 import { cn } from "@subboost/ui/lib/utils";
@@ -20,6 +21,11 @@ import {
   type ProxyGroupNameDraft,
 } from "./proxy-group-name-editor";
 import { ProxyGroupSummary } from "./proxy-group-summary";
+import {
+  getLoadBalanceStrategyLabel,
+  getProxyGroupTypeLabel,
+  ProxyGroupTypeMenu,
+} from "./proxy-group-type-menu";
 
 type DialerSelectableNode = {
   name: string;
@@ -39,7 +45,6 @@ export function DialerProxyGroupsSection({
   const {
     nodes,
     dialerProxyGroups,
-    filteredProxyGroups,
     customProxyGroups,
     proxyGroupNameOverrides,
     addDialerProxyGroup,
@@ -89,16 +94,12 @@ export function DialerProxyGroupsSection({
       const name = typeof g.name === "string" ? g.name.trim() : "";
       if (name) names.push(name);
     }
-    for (const g of filteredProxyGroups) {
-      const name = g && typeof g.name === "string" ? g.name.trim() : "";
-      if (name) names.push(name);
-    }
     for (const g of dialerProxyGroups) {
       const name = g && typeof g.name === "string" ? g.name.trim() : "";
       if (name) names.push(name);
     }
     return names;
-  }, [customProxyGroups, dialerProxyGroups, filteredProxyGroups, resolveModuleFullName]);
+  }, [customProxyGroups, dialerProxyGroups, resolveModuleFullName]);
 
   const handleAddDialerGroup = (name: string) => {
     const nextName = name.trim();
@@ -139,14 +140,27 @@ export function DialerProxyGroupsSection({
         type: n.type,
       })) as DialerSelectableNode[];
 
-    const availableFilteredGroups = filteredProxyGroups
-      .filter((g) => g && g.enabled && typeof g.name === "string" && g.name.trim())
-      .map((g) => ({ name: g.name.trim(), type: "筛选组" } as DialerSelectableNode));
+    const availableProxyGroups = [
+      ...PROXY_GROUP_MODULES.map(
+        (module) =>
+          ({
+            name: resolveModuleFullName(module),
+            type: "内置组",
+          }) as DialerSelectableNode,
+      ),
+      ...customProxyGroups
+        .filter((group) => group.enabled !== false)
+        .map((group) => ({
+          name: typeof group.name === "string" ? group.name.trim() : "",
+          type: "自定义组",
+        }))
+        .filter((group) => group.name),
+    ];
 
     // 中转组允许选择 DIRECT（直连）作为“入口”
     // 注意：这里只用于 dialer-proxy 的代理组 proxies 字段，Clash/Mihomo 支持 DIRECT。
     // excludeGroupId 用于在该组停用时仍保留“自身 targetNodes 不可作为中转节点”的约束
-    return [DIRECT_RELAY_OPTION, ...availableFilteredGroups, ...available];
+    return [DIRECT_RELAY_OPTION, ...available, ...availableProxyGroups];
   };
 
   return (
@@ -177,6 +191,12 @@ export function DialerProxyGroupsSection({
           {dialerProxyGroups.map((group) => {
             const isEnabled = group.enabled !== false;
             const isEditing = editingDialerGroupId === group.id;
+            const dialerGroupType: ProxyGroupGroupType = group.type;
+            const dialerStrategy = group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY;
+            const dialerTypeLabel =
+              dialerGroupType === "load-balance"
+                ? `${getProxyGroupTypeLabel(dialerGroupType)} / ${getLoadBalanceStrategyLabel(dialerStrategy)}`
+                : getProxyGroupTypeLabel(dialerGroupType);
             const relaySearchKeyword = (relaySearchByGroupId[group.id] ?? "").trim().toLowerCase();
             const targetSearchKeyword = (targetSearchByGroupId[group.id] ?? "").trim().toLowerCase();
             const availableRelayNodes = getAvailableRelayNodes(group.id);
@@ -305,7 +325,7 @@ export function DialerProxyGroupsSection({
                         );
                         const nextRelayNodes = group.relayNodes.filter((n) => {
                           if (n === "DIRECT") return true;
-                          if (!nodeNameSet.has(n)) return true; // 筛选组等
+                          if (!nodeNameSet.has(n)) return true; // 代理组等
                           return !otherTargets.has(n);
                         });
 
@@ -332,6 +352,32 @@ export function DialerProxyGroupsSection({
                         }
                       }}
                       onClick={(e) => e.stopPropagation()}
+                    />
+                    <ProxyGroupTypeMenu
+                      value={dialerGroupType}
+                      strategy={dialerStrategy}
+                      contentAlign="end"
+                      onChange={({ groupType, strategy }) =>
+                        updateDialerProxyGroup(group.id, {
+                          type: groupType,
+                          ...(groupType === "load-balance"
+                            ? { strategy: strategy ?? group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY }
+                            : { strategy: undefined }),
+                        })
+                      }
+                      trigger={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 px-2 text-white/35 hover:text-indigo-200"
+                          title={`类型：${dialerTypeLabel}`}
+                          aria-label={`修改 ${group.name} 类型`}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      }
                     />
                     <button
                       onClick={(e) => {

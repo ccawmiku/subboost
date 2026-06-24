@@ -13,13 +13,13 @@ import {
   getEffectiveModuleRuleItems,
   getExcludedModuleRuleIds,
   isModuleRuleMovedFrom,
-  type ModuleRuleExclusions,
+  type HiddenPresetRuleIds,
 } from "@subboost/core/generator/module-rules";
 import { EXPERIMENTAL_CN_RULE } from "@subboost/core/generator/rules";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
 import { cn } from "@subboost/ui/lib/utils";
 import { useProductApiAdapter } from "@subboost/ui/product/api-adapter";
-import type { CustomProxyGroup, ModuleRuleOverride } from "@subboost/ui/store/config-store";
+import type { CustomProxyGroup, RuleSetDraft } from "@subboost/ui/store/config-store";
 import type {
   CustomRuleListItem,
   ProxyGroupRuleTarget,
@@ -45,6 +45,10 @@ type CnCandidateRule = {
   parentRuleId?: string;
   parentModuleId?: string;
 };
+
+function isModuleRuleMoveTarget(target: ProxyGroupRuleTarget): target is ProxyGroupRuleTarget & MoveTarget {
+  return target.kind === "module" || target.kind === "custom";
+}
 
 function isCnCandidateRule(value: unknown): value is CnCandidateRule {
   if (!value || typeof value !== "object") return false;
@@ -77,8 +81,8 @@ export function ProxyGroupsModuleRulesPanel({
   module,
   enabledProxyGroups,
   hiddenProxyGroups,
-  moduleRuleOverrides,
-  moduleRuleExclusions,
+  ruleSetsByTarget,
+  hiddenPresetRuleIds,
   customProxyGroups,
   manualRules,
   manualRuleTargets,
@@ -93,6 +97,7 @@ export function ProxyGroupsModuleRulesPanel({
   onMoveManualRule,
   onRemoveManualRule,
   onRestoreRule,
+  onResetRuleTarget,
   cnIpNoResolve,
   onChangeCnIpNoResolve,
   experimentalCnUseCnRuleSet,
@@ -101,22 +106,23 @@ export function ProxyGroupsModuleRulesPanel({
   module: ProxyGroupModule;
   enabledProxyGroups: string[];
   hiddenProxyGroups: string[];
-  moduleRuleOverrides: Record<string, ModuleRuleOverride[]>;
-  moduleRuleExclusions: ModuleRuleExclusions;
+  ruleSetsByTarget: Record<string, RuleSetDraft[]>;
+  hiddenPresetRuleIds: HiddenPresetRuleIds;
   customProxyGroups: CustomProxyGroup[];
   manualRules: CustomRuleListItem[];
   manualRuleTargets: ProxyGroupRuleTarget[];
   proxyGroupNameOverrides: Record<string, string>;
   moduleRuleEditWarningAccepted: boolean;
   acceptModuleRuleEditWarning: () => void;
-  onAddRules: (rules: ModuleRuleOverride[]) => void;
-  onAddRulesToModule: (moduleId: string, rules: ModuleRuleOverride[]) => void;
-  onAddRuleToCustomGroup: (groupId: string, rule: ModuleRuleOverride) => void;
+  onAddRules: (rules: RuleSetDraft[]) => void;
+  onAddRulesToModule: (moduleId: string, rules: RuleSetDraft[]) => void;
+  onAddRuleToCustomGroup: (groupId: string, rule: RuleSetDraft) => void;
   onRemoveRule: (ruleId: string) => void;
   onMoveRule: (ruleId: string, target: MoveTarget) => void;
   onMoveManualRule: (ruleId: string, targetName: string) => void;
   onRemoveManualRule: (index: number) => void;
   onRestoreRule: (ruleId: string) => void;
+  onResetRuleTarget: (ruleId: string) => void;
   cnIpNoResolve: boolean;
   onChangeCnIpNoResolve: (value: boolean) => void;
   experimentalCnUseCnRuleSet: boolean;
@@ -127,9 +133,9 @@ export function ProxyGroupsModuleRulesPanel({
     () => enabledProxyGroups.map((id) => id.trim()).filter(Boolean).join(","),
     [enabledProxyGroups]
   );
-  const moduleRuleExclusionsKey = React.useMemo(
+  const hiddenPresetRuleIdsKey = React.useMemo(
     () =>
-      Object.entries(moduleRuleExclusions || {})
+      Object.entries(hiddenPresetRuleIds || {})
         .flatMap(([moduleId, ruleIds]) =>
           Array.isArray(ruleIds)
             ? ruleIds.map((ruleId) => `${moduleId.trim()}:${String(ruleId).trim()}`)
@@ -139,27 +145,27 @@ export function ProxyGroupsModuleRulesPanel({
         .filter((key) => key && !key.endsWith(":"))
         .sort((a, b) => a.localeCompare(b))
         .join(","),
-    [moduleRuleExclusions]
+    [hiddenPresetRuleIds]
   );
   const [cnCandidateRules, setCnCandidateRules] = React.useState<CnCandidateRule[]>([]);
 
   const activeRules = React.useMemo(
-    () => getEffectiveModuleRuleItems(module, moduleRuleOverrides, moduleRuleExclusions),
-    [module, moduleRuleExclusions, moduleRuleOverrides]
+    () => getEffectiveModuleRuleItems(module, ruleSetsByTarget, hiddenPresetRuleIds),
+    [module, hiddenPresetRuleIds, ruleSetsByTarget]
   );
 
   const inactiveRules = React.useMemo<InactiveRuleRow[]>(() => {
-    const excluded = getExcludedModuleRuleIds(module.id, moduleRuleExclusions);
+    const excluded = getExcludedModuleRuleIds(module.id, hiddenPresetRuleIds);
     return module.rules
       .filter((rule) => rule?.id && excluded.has(rule.id))
       .map((rule) => ({
         ...rule,
         source: "preset" as const,
-        state: isModuleRuleMovedFrom(module.id, rule.id, moduleRuleOverrides, customProxyGroups)
+        state: isModuleRuleMovedFrom(module.id, rule.id, ruleSetsByTarget)
           ? "moved" as const
           : "removed" as const,
       }));
-  }, [customProxyGroups, module, moduleRuleExclusions, moduleRuleOverrides]);
+  }, [module, hiddenPresetRuleIds, ruleSetsByTarget]);
 
   const rules = React.useMemo<RuleRow[]>(
     () => [
@@ -189,7 +195,7 @@ export function ProxyGroupsModuleRulesPanel({
         id: targetModule.id,
         name: resolveProxyGroupModuleName(targetModule, proxyGroupNameOverrides?.[targetModule.id]),
       })),
-      ...customProxyGroups.map((group) => ({
+      ...customProxyGroups.filter((group) => group.enabled !== false).map((group) => ({
         kind: "custom" as const,
         id: group.id,
         name: group.name,
@@ -207,7 +213,7 @@ export function ProxyGroupsModuleRulesPanel({
     const controller = new AbortController();
     const params = new URLSearchParams();
     if (enabledProxyGroupsKey) params.set("modules", enabledProxyGroupsKey);
-    if (moduleRuleExclusionsKey) params.set("excluded", moduleRuleExclusionsKey);
+    if (hiddenPresetRuleIdsKey) params.set("excluded", hiddenPresetRuleIdsKey);
 
     if (!rulesApi?.loadCnCandidateRules) {
       setCnCandidateRules([]);
@@ -228,7 +234,7 @@ export function ProxyGroupsModuleRulesPanel({
       });
 
     return () => controller.abort();
-  }, [enabledProxyGroupsKey, module.id, moduleRuleExclusionsKey, rulesApi]);
+  }, [enabledProxyGroupsKey, module.id, hiddenPresetRuleIdsKey, rulesApi]);
 
   const ensurePresetEditWarning = React.useCallback(async () => {
     if (moduleRuleEditWarningAccepted) return true;
@@ -263,7 +269,7 @@ export function ProxyGroupsModuleRulesPanel({
   );
   const moveExperimentalCnRule = React.useCallback(
     (target: MoveTarget) => {
-      const rule: ModuleRuleOverride = {
+      const rule: RuleSetDraft = {
         id: EXPERIMENTAL_CN_RULE.id,
         name: EXPERIMENTAL_CN_RULE.name,
         behavior: EXPERIMENTAL_CN_RULE.behavior,
@@ -280,13 +286,13 @@ export function ProxyGroupsModuleRulesPanel({
   );
 
   return (
-    <div className="mt-2 border-t border-white/10 pt-1">
+    <div className="space-y-1">
       {rules.length === 0 && manualRules.length === 0 ? (
         <div className="px-3 py-4 text-center text-[11px] text-white/40">
           当前没有生效的规则集。
         </div>
       ) : (
-        <div className="space-y-1 py-1">
+        <div className="space-y-1">
           {rules.map((rule) => {
             if (rule.state !== "active") {
               const isCnIpRule = module.id === "cn" && rule.id === "cn-ip";
@@ -310,9 +316,13 @@ export function ProxyGroupsModuleRulesPanel({
                           ? "text-orange-300/70 hover:text-orange-200"
                           : "text-red-300/70 hover:text-red-200",
                       )}
-                      title="恢复规则集"
-                      aria-label={`恢复 ${rule.name} 规则集`}
-                      onClick={() => onRestoreRule(rule.id)}
+                      title={rule.state === "moved" ? "恢复默认目标" : "恢复规则集"}
+                      aria-label={`${rule.state === "moved" ? "恢复默认目标" : "恢复"} ${rule.name} 规则集`}
+                      onClick={() =>
+                        rule.state === "moved"
+                          ? onResetRuleTarget(rule.id)
+                          : onRestoreRule(rule.id)
+                      }
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                     </Button>
@@ -347,7 +357,7 @@ export function ProxyGroupsModuleRulesPanel({
                       kinds={["module", "custom"]}
                       currentTarget={{ kind: "module", id: module.id, name: moduleDisplayName }}
                       onMove={(target) => {
-                        if (isRuleSetMoveTarget(target)) {
+                        if (isRuleSetMoveTarget(target) && isModuleRuleMoveTarget(target)) {
                           void moveRule(rule, target);
                         }
                       }}
@@ -384,11 +394,11 @@ export function ProxyGroupsModuleRulesPanel({
       )}
 
       {module.id === "cn" && (
-        <div className="border-t border-white/10 py-1">
+        <div>
           <div
             className={cn(
-              "proxy-group-rule-row grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2 pl-8 pr-2",
-              !experimentalCnUseCnRuleSet && "rounded border border-red-500/20 bg-red-500/10"
+              "proxy-group-rule-row grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 rounded border border-white/10 bg-white/[0.04] px-2 py-2",
+              !experimentalCnUseCnRuleSet && "border-red-500/20 bg-red-500/10"
             )}
           >
             <div className="min-w-0 space-y-1">
@@ -441,7 +451,7 @@ export function ProxyGroupsModuleRulesPanel({
                     kinds={["module", "custom"]}
                     currentTarget={{ kind: "module", id: module.id, name: moduleDisplayName }}
                     onMove={(target) => {
-                      if (isRuleSetMoveTarget(target)) {
+                      if (isRuleSetMoveTarget(target) && isModuleRuleMoveTarget(target)) {
                         moveExperimentalCnRule(target);
                       }
                     }}
@@ -477,8 +487,8 @@ export function ProxyGroupsModuleRulesPanel({
       )}
 
       {module.id === "cn" && availableCnCandidateRules.length > 0 && (
-        <div className="border-t border-white/10 px-2 py-2">
-          <div className="mb-1 flex items-center gap-1.5 pl-6 pr-2">
+        <div className="rounded border border-white/10 bg-white/[0.03] px-2 py-2">
+          <div className="mb-2 flex items-center gap-1.5">
             <div className="text-xs font-medium text-white">中国相关子规则集</div>
             <Popover.Root>
               <Popover.Trigger asChild>
@@ -515,7 +525,7 @@ export function ProxyGroupsModuleRulesPanel({
               </Popover.Portal>
             </Popover.Root>
           </div>
-          <div className="space-y-1 px-4">
+          <div className="space-y-1">
             {availableCnCandidateRules.map((rule) => (
               <div
                 key={rule.id}

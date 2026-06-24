@@ -257,6 +257,50 @@ describe("createSourceActions", () => {
     });
   });
 
+  it("reimports duplicate-origin node sources even when a legacy deleted name exists", async () => {
+    mocks.parseSubscription.mockReturnValueOnce(
+      parseResult([
+        node("SOCKS-same.example.com:1080", {
+          server: "same.example.com",
+          port: 1080,
+          password: "one",
+        }),
+        node("SOCKS-same.example.com:1080", {
+          server: "same.example.com",
+          port: 1080,
+          password: "two",
+        }),
+      ])
+    );
+    const { actions, getState } = createHarness({
+      sources: [source({ id: "s1", type: "nodes", content: "socks5://same.example.com:1080:u:p" })],
+      deletedNodeNames: ["SOCKS-same.example.com:1080"],
+      deletedNodes: [],
+    });
+
+    await actions.parseSingleSource("s1");
+
+    expect(getState().nodes).toEqual([
+      expect.objectContaining({
+        name: "SOCKS-same.example.com:1080",
+        _originName: "SOCKS-same.example.com:1080",
+        _sourceIds: ["s1"],
+        password: "one",
+      }),
+      expect.objectContaining({
+        name: "SOCKS-same.example.com:1080 (2)",
+        _originName: "SOCKS-same.example.com:1080",
+        _sourceIds: ["s1"],
+        password: "two",
+      }),
+    ]);
+    expect(getState().sources[0]).toMatchObject({
+      parsing: false,
+      parsed: true,
+      nodeCount: 2,
+    });
+  });
+
   it("parses fetched URL content when no prefetched parse result exists", async () => {
     mocks.fetchUrlContentInBrowser.mockResolvedValueOnce({
       content: "ss://remote",
@@ -290,6 +334,28 @@ describe("createSourceActions", () => {
       parsing: false,
       subscriptionUserInfo: undefined,
       lastParsedContent: "https://example.com/sub",
+    });
+  });
+
+  it("keeps original URL text when a fetched single source cannot be normalized", async () => {
+    mocks.fetchUrlContentInBrowser.mockResolvedValueOnce({
+      content: "ss://remote",
+      headers: {},
+    });
+    mocks.parseSubscription.mockReturnValueOnce(parseResult([node("Remote Node")]));
+    const { actions, getState } = createHarness({
+      sources: [source({ id: "s1", type: "url", content: "not a url" })],
+    });
+
+    await actions.parseSingleSource("s1");
+
+    expect(getState().nodes).toEqual([
+      expect.objectContaining({ name: "Remote Node", _originName: "Remote Node", _sourceIds: ["s1"] }),
+    ]);
+    expect(getState().sources[0]).toMatchObject({
+      parsed: true,
+      lastParsedContent: "not a url",
+      subscriptionUserInfo: undefined,
     });
   });
 

@@ -39,15 +39,13 @@ type ProxyGroupRuleRowProps = {
 };
 
 const targetKindLabels: Record<ProxyGroupRuleTargetKind, string> = {
-  module: "内置分流组",
-  custom: "自定义分组",
-  filtered: "筛选组",
+  module: "内置组",
+  custom: "自定义组",
 };
 
 const emptyTargetLabels: Record<ProxyGroupRuleTargetKind, string> = {
-  module: "暂无内置分流组",
-  custom: "暂无自定义分组",
-  filtered: "暂无筛选组",
+  module: "暂无内置组",
+  custom: "暂无自定义组",
 };
 
 export function ProxyGroupRuleRow({
@@ -64,11 +62,11 @@ export function ProxyGroupRuleRow({
   return (
     <div
       className={cn(
-        "proxy-group-rule-row grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 py-2 pl-8 pr-2",
+        "proxy-group-rule-row grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 rounded border border-white/10 bg-white/[0.04] px-2 py-2",
         isInactive &&
           (isMoved
-            ? "rounded border border-orange-500/25 bg-orange-500/10"
-            : "rounded border border-red-500/20 bg-red-500/10"),
+            ? "border-orange-500/25 bg-orange-500/10"
+            : "border-red-500/20 bg-red-500/10"),
       )}
     >
       <div className="min-w-0 space-y-1">
@@ -181,7 +179,7 @@ export function ProxyGroupManualRuleRow({
             title="移动规则"
             ariaLabel={`移动 ${rule.value} 规则`}
             targets={targets}
-            kinds={["module", "custom", "filtered"]}
+            kinds={["module", "custom"]}
             currentTarget={{ name: currentTargetName }}
             onMove={(target) => onMove(item, target)}
           />
@@ -293,7 +291,7 @@ function RuleSourceBadge({ source }: { source: RuleSource }) {
   const label = {
     preset: "预设",
     custom: "自定义",
-    manual: "手动",
+    manual: "自定义",
     experimental: "实验性",
   }[source];
 

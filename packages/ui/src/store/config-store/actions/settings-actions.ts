@@ -9,13 +9,13 @@ type SettingsActions = Pick<
   | "setTestUrl"
   | "setTestInterval"
   | "setRuleProviderBaseUrl"
+  | "setProxyGroupAdvancedModeEnabled"
   | "setCnIpNoResolve"
   | "setExperimentalCnUseCnRuleSet"
-  | "setAllRulesOrderEditingEnabled"
 >;
 
 export function createSettingsActions(
-  set: SetState,
+  _set: SetState,
   _get: GetState,
   setAndGenerateConfig: SetAndGenerateConfig
 ): SettingsActions {
@@ -44,16 +44,16 @@ export function createSettingsActions(
       setAndGenerateConfig(() => ({ ruleProviderBaseUrl: url }));
     },
 
+    setProxyGroupAdvancedModeEnabled: (value: boolean) => {
+      setAndGenerateConfig(() => ({ proxyGroupAdvancedModeEnabled: Boolean(value) }));
+    },
+
     setCnIpNoResolve: (value: boolean) => {
       setAndGenerateConfig(() => ({ cnIpNoResolve: Boolean(value) }));
     },
 
     setExperimentalCnUseCnRuleSet: (value: boolean) => {
       setAndGenerateConfig(() => ({ experimentalCnUseCnRuleSet: Boolean(value) }));
-    },
-
-    setAllRulesOrderEditingEnabled: (enabled: boolean) => {
-      set({ allRulesOrderEditingEnabled: Boolean(enabled) });
     },
   };
 }

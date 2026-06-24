@@ -311,4 +311,107 @@ proxies:
     });
     expect(result.errors[0]).toContain('节点 "HY Ports Only" 解析失败');
   });
+
+  it("covers non-mutating YAML normalization branches and protocol defaults", () => {
+    const result = parseClashYaml(`
+proxies:
+  - 1
+  - name: VMess TCP
+    type: vmess
+    server: vmess-tcp.example.com
+    port: 80
+  - name: VMess WS Empty
+    type: vmess
+    server: vmess-ws-empty.example.com
+    port: 443
+    network: ws
+  - name: VMess WS Plain
+    type: vmess
+    server: vmess-ws-plain.example.com
+    port: 443
+    network: ws
+    ws-opts:
+      path: /plain
+  - name: VLESS No Reality
+    type: vless
+    server: vless-none.example.com
+    port: 443
+  - name: VLESS Empty Reality
+    type: vless
+    server: vless-empty.example.com
+    port: 443
+    reality-opts:
+      short-id: "0x"
+  - name: VLESS Numeric Reality
+    type: vless
+    server: vless-numeric.example.com
+    port: 443
+    reality-opts:
+      public-key: 123
+      short-id: 7
+  - name: AnyTLS Default
+    type: anytls
+    server: anytls-default.example.com
+    port: 443
+  - name: HY2 Default
+    type: hysteria2
+    server: hy2-default.example.com
+    port: 443
+  - name: TUIC Default
+    type: tuic
+    server: tuic-default.example.com
+    port: 443
+  - name: Masque
+    type: masque
+    server: masque.example.com
+    port: 443
+  - name: Sudoku
+    type: sudoku
+    server: sudoku.example.com
+    port: 443
+  - name: Bad Unknown
+    type: ss
+    port: bad
+`);
+
+    expect(result.nodes.find((node) => node.name === "VMess TCP")).toMatchObject({
+      type: "vmess",
+      uuid: "",
+      network: undefined,
+    });
+    expect(result.nodes.find((node) => node.name === "VMess WS Empty")).toMatchObject({
+      type: "vmess",
+      network: "ws",
+    });
+    expect(result.nodes.find((node) => node.name === "VMess WS Plain")).toMatchObject({
+      "ws-opts": { path: "/plain" },
+    });
+    expect(result.nodes.find((node) => node.name === "VLESS No Reality")).toMatchObject({
+      type: "vless",
+      uuid: "",
+    });
+    expect(result.nodes.find((node) => node.name === "VLESS Empty Reality")?.["reality-opts"]).toBeUndefined();
+    expect(result.nodes.find((node) => node.name === "VLESS Numeric Reality")).toMatchObject({
+      "reality-opts": {
+        "public-key": 123,
+        "short-id": "07",
+      },
+    });
+    expect(result.nodes.find((node) => node.name === "AnyTLS Default")).toMatchObject({
+      type: "anytls",
+      password: "",
+    });
+    expect(result.nodes.find((node) => node.name === "HY2 Default")).toMatchObject({
+      type: "hysteria2",
+      password: "",
+    });
+    expect(result.nodes.find((node) => node.name === "TUIC Default")).toMatchObject({
+      type: "tuic",
+      uuid: "",
+      password: "",
+    });
+    expect(result.nodes.find((node) => node.name === "Masque")).toMatchObject({ type: "masque" });
+    expect(result.nodes.find((node) => node.name === "Sudoku")).toMatchObject({ type: "sudoku" });
+    expect(result.errors[0]).toContain('节点 "Bad Unknown" 解析失败');
+  });
 });

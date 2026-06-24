@@ -12,13 +12,12 @@ import {
   createCustomRuleId,
   ensureCustomRuleId,
   ensureCustomRulesHaveIds,
-  getCustomGroupRuleOrderKey,
   getCustomRuleOrderKey,
   isCustomRuleType,
   listEditableRuleOrderKeys,
   reconcileRuleOrder,
 } from "./custom-rule-utils";
-import type { CustomProxyGroup, CustomRule } from "@subboost/core/types/config";
+import type { CustomProxyGroup, CustomRule, CustomRuleSet } from "@subboost/core/types/config";
 
 describe("custom routing rule set helpers", () => {
   it("parses, normalizes, and builds rule-set targets and paths", () => {
@@ -26,6 +25,7 @@ describe("custom routing rule set helpers", () => {
     expect(parseRuleSetTargetValue(" module: select ")).toEqual({ kind: "module", id: "select" });
     expect(parseRuleSetTargetValue("custom:custom-a")).toEqual({ kind: "custom", id: "custom-a" });
     expect(parseRuleSetTargetValue("module: ")).toBeNull();
+    expect(parseRuleSetTargetValue("custom: ")).toBeNull();
     expect(parseRuleSetTargetValue("other:select")).toBeNull();
 
     expect(extractRuleSetPathFromUrl("https://cdn.example/rules/geosite/openai.mrs?token=1")).toBe(
@@ -46,43 +46,46 @@ describe("custom routing rule set helpers", () => {
       {
         id: "custom-a",
         name: "Custom A",
-        rules: [
-          {
-            id: "custom-rule",
-            name: "",
-            behavior: "domain",
-            url: "https://cdn.example/geosite/custom.mrs",
-            noResolve: true,
-          },
-          { id: "", behavior: "domain", url: "https://cdn.example/geosite/skip.mrs" },
-          { id: "missing-url", behavior: "domain", url: "" },
-        ],
+        emoji: "",
+        groupType: "select",
       },
-      { id: "", name: "skip", rules: [] },
+      { id: "", name: "skip", emoji: "", groupType: "select" },
     ] as CustomProxyGroup[];
 
     const items = collectCustomRoutingRuleSets({
       customProxyGroups,
-      moduleRuleOverrides: {
-        select: [
-          {
-            id: "module-rule",
-            name: "",
-            behavior: "ipcidr",
-            path: "/geoip/private.mrs",
-            noResolve: true,
-          },
-          { id: "", name: "skip", behavior: "domain", path: "geosite/skip.mrs" },
-          { id: "missing-path", name: "missing path", behavior: "domain", path: "" },
-        ],
-      },
+      customRuleSets: [
+        {
+          id: "module-rule",
+          name: "",
+          behavior: "ipcidr",
+          path: "/geoip/private.mrs",
+          target: "🚀 Custom Select",
+          noResolve: true,
+        },
+        {
+          id: "custom-rule",
+          name: "",
+          behavior: "domain",
+          path: "https://cdn.example/geosite/custom.mrs",
+          target: "Custom A",
+          noResolve: true,
+        },
+        { id: "", name: "skip", behavior: "domain", path: "geosite/skip.mrs", target: "Custom A" },
+        { id: "missing-path", name: "missing path", behavior: "domain", path: "", target: "Custom A" },
+        { id: "missing-module", name: "missing module", behavior: "domain", path: "geosite/missing.mrs", target: { kind: "module", id: "missing" } },
+        { id: "missing-custom", name: "missing custom", behavior: "domain", path: "geosite/missing.mrs", target: { kind: "custom", id: "missing" } },
+        { id: "blank-custom", name: "blank custom", behavior: "domain", path: "geosite/blank.mrs", target: { kind: "custom", id: "" } },
+        { id: "blank-target", name: "blank target", behavior: "domain", path: "geosite/blank-target.mrs", target: " " },
+      ],
       proxyGroupNameOverrides: { select: "Custom Select" },
     });
 
     expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          key: "module:select:module-rule",
+          key: "custom-rule-set:module-rule",
+          source: { kind: "custom-rule-set", id: "module-rule" },
           id: "module-rule",
           name: "module-rule",
           behavior: "ipcidr",
@@ -91,7 +94,8 @@ describe("custom routing rule set helpers", () => {
           noResolve: true,
         }),
         expect.objectContaining({
-          key: "custom:custom-a:custom-rule",
+          key: "custom-rule-set:custom-rule",
+          source: { kind: "custom-rule-set", id: "custom-rule" },
           id: "custom-rule",
           name: "custom-rule",
           path: "geosite/custom.mrs",
@@ -127,38 +131,36 @@ describe("custom rule id and order helpers", () => {
     expect(isCustomRuleType("BAD")).toBe(false);
 
     const customRules = [ruleWithoutId];
-    const customProxyGroups = [
+    const customRuleSets = [
       {
-        id: "group-a",
-        name: "Group A",
-        emoji: "🧩",
-        groupType: "select",
-        rules: [{ id: "rule-a", name: "Rule A", behavior: "domain", url: "geosite/a.mrs" }],
+        id: "rule-a",
+        name: "Rule A",
+        behavior: "domain",
+        path: "geosite/a.mrs",
+        target: "Group A",
       },
       {
         id: " ",
         name: "Skip",
-        emoji: "🧩",
-        groupType: "select",
-        rules: [{ id: "skip", name: "Skip", behavior: "domain", url: "geosite/b.mrs" }],
+        behavior: "domain",
+        path: "geosite/b.mrs",
+        target: "Group A",
       },
-      { id: "group-b", name: "Skip Rules", emoji: "🧩", groupType: "select", rules: null as never },
-    ] as CustomProxyGroup[];
+    ] as CustomRuleSet[];
 
     expect(getCustomRuleOrderKey("r1")).toBe("custom-rule:r1");
-    expect(getCustomGroupRuleOrderKey("g1", "r1")).toBe("custom-group:g1:r1");
-    expect(listEditableRuleOrderKeys(customRules, customProxyGroups)).toEqual([
+    expect(listEditableRuleOrderKeys(customRules, customRuleSets)).toEqual([
       `custom-rule:${ruleWithoutId.id}`,
-      "custom-group:group-a:rule-a",
+      "custom-rule-set:rule-a",
     ]);
     expect(reconcileRuleOrder(undefined, [], [])).toEqual([]);
     expect(
       reconcileRuleOrder(
-        [" missing ", "custom-group:group-a:rule-a", "custom-group:group-a:rule-a"],
+        [" missing ", "custom-rule-set:rule-a", "custom-rule-set:rule-a"],
         customRules,
-        customProxyGroups
+        customRuleSets
       )
-    ).toEqual(["custom-group:group-a:rule-a", `custom-rule:${ruleWithoutId.id}`]);
+    ).toEqual(["custom-rule-set:rule-a", `custom-rule:${ruleWithoutId.id}`]);
     expect(reconcileRuleOrder("bad" as never, customRules, [])).toEqual([`custom-rule:${ruleWithoutId.id}`]);
   });
 });
@@ -222,6 +224,71 @@ describe("custom rule batch import", () => {
       expect.objectContaining({ type: "DOMAIN", value: "batch.com", target: "PROXY", noResolve: false }),
       expect.objectContaining({ type: "DOMAIN-SUFFIX", value: "quoted,domain", target: "DIRECT", noResolve: false }),
       expect.objectContaining({ type: "DOMAIN", value: "a\"b.com", target: "PROXY", noResolve: false }),
+    ]);
+  });
+
+  it("handles YAML list edge cases and all-ready imports", () => {
+    const skipped = parseCustomRuleBatchImport({
+      text: ["rules:", "-", "- # nested comment", "- // nested comment"].join("\n"),
+      defaultType: "DOMAIN",
+      defaultTarget: "PROXY",
+      defaultNoResolve: false,
+      targetOptions: ["PROXY"],
+      existingRules: [],
+    });
+
+    expect(skipped.items.map((item) => item.message)).toEqual(["rules 块标记", "空 YAML 列表项", "注释", "注释"]);
+    expect(skipped.canImport).toBe(false);
+
+    const ready = parseCustomRuleBatchImport({
+      text: ["- DOMAIN,example.com", "- DOMAIN-SUFFIX,example.org,PROXY"].join("\n"),
+      defaultType: "DOMAIN",
+      defaultTarget: "PROXY",
+      defaultNoResolve: true,
+      targetOptions: ["PROXY"],
+      existingRules: [],
+    });
+
+    expect(ready.items.map((item) => item.status)).toEqual(["ready", "ready"]);
+    expect(ready.rules).toEqual([
+      expect.objectContaining({ type: "DOMAIN", value: "example.com", target: "PROXY", noResolve: true }),
+      expect.objectContaining({ type: "DOMAIN-SUFFIX", value: "example.org", target: "PROXY", noResolve: false }),
+    ]);
+    expect(ready.canImport).toBe(true);
+  });
+
+  it("defaults two-column rules and matches duplicate object targets", () => {
+    const result = parseCustomRuleBatchImport({
+      text: [
+        "DOMAIN,two-column.example",
+        "DOMAIN,object.example,custom:custom-a",
+      ].join("\n"),
+      defaultType: "DOMAIN-SUFFIX",
+      defaultTarget: "PROXY",
+      defaultNoResolve: true,
+      targetOptions: ["PROXY", "custom:custom-a"],
+      existingRules: [
+        {
+          id: "existing-object",
+          type: "DOMAIN",
+          value: "object.example",
+          target: { kind: "custom", id: "custom-a" },
+          noResolve: false,
+        } as CustomRule,
+      ],
+    });
+
+    expect(result.items.map((item) => item.status)).toEqual([
+      "ready",
+      "duplicate",
+    ]);
+    expect(result.rules).toEqual([
+      expect.objectContaining({
+        type: "DOMAIN",
+        value: "two-column.example",
+        target: "PROXY",
+        noResolve: true,
+      }),
     ]);
   });
 });

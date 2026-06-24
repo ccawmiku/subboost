@@ -15,26 +15,26 @@ import {
 import { toast } from "@subboost/ui/components/ui/toaster";
 import { cn } from "@subboost/ui/lib/utils";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
-import { getEffectiveModuleRules } from "@subboost/core/generator/module-rules";
+import { getModuleRuleOrderKey } from "@subboost/core/generator/module-rules";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
+import { resolveProxyGroupTargetName } from "@subboost/core/proxy-group-targets";
+import { normalizeRuleSetPathInput } from "@subboost/core/rules/rule-model";
 import { RULE_CATEGORIES, type RuleSetInfo } from "@subboost/core/rules/metadata";
 import { useConfigStore } from "@subboost/ui/store/config-store";
 import { useProductInteractionAdapter } from "@subboost/ui/product/interactions";
 import { ProxyGroupsAddedRuleSets } from "./proxy-groups-added-rule-sets";
-import { getRuleDisplayName, replaceRuleProviderBase, useRulesLibrarySearch } from "./proxy-groups-rules-search";
+import { getRuleDisplayName, useRulesLibrarySearch } from "./proxy-groups-rules-search";
 
 export function ProxyGroupsRulesLibrary() {
   const {
-    ruleProviderBaseUrl,
     enabledProxyGroups,
     hiddenProxyGroups,
     toggleProxyGroup,
-    moduleRuleOverrides,
-    moduleRuleExclusions,
+    customRuleSets = [],
+    builtinRuleEdits = {},
     addModuleRules,
-    customProxyGroups,
-    updateCustomProxyGroup,
-    proxyGroupNameOverrides,
+    customProxyGroups = [],
+    proxyGroupNameOverrides = {},
   } = useConfigStore();
   const interactions = useProductInteractionAdapter();
 
@@ -63,13 +63,33 @@ export function ProxyGroupsRulesLibrary() {
     const hidden = new Set(hiddenProxyGroups);
     return PROXY_GROUP_MODULES.filter((module) => !hidden.has(module.id));
   }, [hiddenProxyGroups]);
+  const activeCustomProxyGroups = React.useMemo(
+    () => customProxyGroups.filter((group) => group.enabled !== false),
+    [customProxyGroups],
+  );
+  const moduleNames = React.useMemo(
+    () =>
+      Object.fromEntries(
+        PROXY_GROUP_MODULES.map((module) => [
+          module.id,
+          resolveModuleFullName(module),
+        ]),
+      ),
+    [resolveModuleFullName],
+  );
 
   React.useEffect(() => {
-    if (!addToGroupId.startsWith("module:")) return;
-    const moduleId = addToGroupId.slice("module:".length);
-    if (visibleProxyGroupModules.some((module) => module.id === moduleId)) return;
+    if (addToGroupId.startsWith("module:")) {
+      const moduleId = addToGroupId.slice("module:".length);
+      if (visibleProxyGroupModules.some((module) => module.id === moduleId)) return;
+    } else if (addToGroupId.startsWith("custom:")) {
+      const groupId = addToGroupId.slice("custom:".length);
+      if (activeCustomProxyGroups.some((group) => group.id === groupId)) return;
+    } else {
+      return;
+    }
     setAddToGroupId("");
-  }, [addToGroupId, visibleProxyGroupModules]);
+  }, [activeCustomProxyGroups, addToGroupId, visibleProxyGroupModules]);
 
   return (
     <div className="min-w-0 space-y-2">
@@ -115,16 +135,34 @@ export function ProxyGroupsRulesLibrary() {
           <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-0.5 bg-white/5 rounded p-1.5 border border-white/10">
             {searchResults.map((rule) => {
               const categoryInfo = RULE_CATEGORIES[rule.category];
-              const belongsToModule = visibleProxyGroupModules.find((m) => {
-                return getEffectiveModuleRules(
-                  m,
-                  moduleRuleOverrides,
-                  moduleRuleExclusions,
-                ).some((r) => r.id === rule.id);
-              });
-              const belongsToCustom = customProxyGroups.find((g) =>
-                g.rules.some((r) => r.id === rule.id),
+              const builtinSourceModule = visibleProxyGroupModules.find((m) =>
+                (m.rules ?? []).some((r) => r.id === rule.id && builtinRuleEdits?.[getModuleRuleOrderKey(m.id, r.id)]?.enabled !== false),
               );
+              const builtinTargetName = builtinSourceModule
+                ? builtinRuleEdits?.[getModuleRuleOrderKey(builtinSourceModule.id, rule.id)]?.target ||
+                  resolveModuleFullName(builtinSourceModule)
+                : "";
+              const resolvedBuiltinTargetName = builtinSourceModule
+                ? resolveProxyGroupTargetName(builtinTargetName, {
+                    moduleNames,
+                    customProxyGroups: activeCustomProxyGroups,
+                    fallbackTarget: resolveModuleFullName(builtinSourceModule),
+                  })
+                : "";
+              const belongsToModule = builtinTargetName
+                ? visibleProxyGroupModules.find((m) => resolveModuleFullName(m) === resolvedBuiltinTargetName)
+                : null;
+              const customRuleSet = customRuleSets.find((item) => item.id === rule.id);
+              const belongsToCustom = customRuleSet
+                ? activeCustomProxyGroups.find(
+                    (g) =>
+                      g.name ===
+                      resolveProxyGroupTargetName(customRuleSet.target, {
+                        moduleNames,
+                        customProxyGroups: activeCustomProxyGroups,
+                      }),
+                  )
+                : null;
               const isModuleEnabled = belongsToModule
                 ? enabledProxyGroups.includes(belongsToModule.id)
                 : false;
@@ -353,7 +391,7 @@ export function ProxyGroupsRulesLibrary() {
                     className="text-xs"
                     disabled
                   >
-                    内置代理组
+                    内置组
                   </SelectItem>
                   {visibleProxyGroupModules.map((m) => (
                     <SelectItem
@@ -369,14 +407,14 @@ export function ProxyGroupsRulesLibrary() {
                     className="text-xs"
                     disabled
                   >
-                    自定义分组
+                    自定义组
                   </SelectItem>
-                  {customProxyGroups.length === 0 ? (
+                  {activeCustomProxyGroups.length === 0 ? (
                     <SelectItem value="__none__" className="text-xs" disabled>
-                      暂无自定义分组
+                      暂无自定义组
                     </SelectItem>
                   ) : (
-                    customProxyGroups.map((g) => (
+                    activeCustomProxyGroups.map((g) => (
                       <SelectItem
                         key={g.id}
                         value={`custom:${g.id}`}
@@ -421,28 +459,41 @@ export function ProxyGroupsRulesLibrary() {
                       ? visibleProxyGroupModules.find((m) => m.id === target.id)
                       : null;
                   if (target.kind === "module" && !targetModule) return;
-
                   const usedRuleIds = new Map<string, string>();
                   for (const m of visibleProxyGroupModules) {
                     const groupName = resolveModuleFullName(m);
-                    for (const r of getEffectiveModuleRules(
-                      m,
-                      moduleRuleOverrides,
-                      moduleRuleExclusions,
-                    )) {
-                      if (!usedRuleIds.has(r.id))
-                        usedRuleIds.set(r.id, groupName);
+                    for (const r of m.rules ?? []) {
+                      const edit = builtinRuleEdits?.[getModuleRuleOrderKey(m.id, r.id)];
+                      if (edit?.enabled === false) continue;
+                      if (!usedRuleIds.has(r.id)) {
+                        usedRuleIds.set(
+                          r.id,
+                          edit?.target
+                            ? resolveProxyGroupTargetName(edit.target, {
+                                moduleNames,
+                                customProxyGroups: activeCustomProxyGroups,
+                                fallbackTarget: groupName,
+                              })
+                            : groupName,
+                        );
+                      }
                     }
                   }
-                  for (const g of customProxyGroups) {
-                    for (const r of g.rules) {
-                      if (!usedRuleIds.has(r.id)) usedRuleIds.set(r.id, g.name);
+                  for (const ruleSet of customRuleSets) {
+                    if (!usedRuleIds.has(ruleSet.id)) {
+                      usedRuleIds.set(
+                        ruleSet.id,
+                        resolveProxyGroupTargetName(ruleSet.target, {
+                          moduleNames,
+                          customProxyGroups: activeCustomProxyGroups,
+                        }),
+                      );
                     }
                   }
 
                   const targetDisplayName =
                     target.kind === "custom"
-                      ? customProxyGroups.find((g) => g.id === target.id)
+                      ? activeCustomProxyGroups.find((g) => g.id === target.id)
                           ?.name || ""
                       : targetModule
                         ? resolveModuleFullName(targetModule)
@@ -479,29 +530,26 @@ export function ProxyGroupsRulesLibrary() {
                   let skippedInvalidCount = 0;
 
                   if (target.kind === "custom") {
-                    const cg = customProxyGroups.find(
-                      (g) => g.id === target.id,
-                    );
-                    if (!cg) return;
-                    const existing = new Set(cg.rules.map((r) => r.id));
+                    const group = activeCustomProxyGroups.find((g) => g.id === target.id);
+                    if (!group) return;
+                    const existing = new Set(customRuleSets.map((r) => r.id));
                     const rulesToAdd = selectedRules
                       .filter((r) => !existing.has(r.id))
-                      .map((rule) => ({
+                      .flatMap((rule) => {
+                        const path = normalizeRuleSetPathInput(rule.url);
+                        if (!path) return [];
+                        return [{
                         id: rule.id,
                         name: rule.nameZh,
                         behavior: rule.behavior,
-                        url: replaceRuleProviderBase(
-                          rule.url,
-                          ruleProviderBaseUrl,
-                        ),
+                        path,
                         noResolve: rule.behavior === "ipcidr",
-                      }));
+                        }];
+                      });
                     skippedExistingCount =
                       selectedRules.length - rulesToAdd.length;
                     if (rulesToAdd.length > 0) {
-                      updateCustomProxyGroup(cg.id, {
-                        rules: [...cg.rules, ...rulesToAdd],
-                      });
+                      addModuleRules(group.id, rulesToAdd);
                       addedCount = rulesToAdd.length;
                     }
                   } else {
@@ -509,11 +557,14 @@ export function ProxyGroupsRulesLibrary() {
                     if (!mod) return;
 
                     const existing = new Set<string>(
-                      getEffectiveModuleRules(
-                        mod,
-                        moduleRuleOverrides,
-                        moduleRuleExclusions,
-                      ).map((r) => r.id),
+                      [
+                        ...(mod.rules ?? [])
+                          .filter((r) => builtinRuleEdits?.[getModuleRuleOrderKey(mod.id, r.id)]?.enabled !== false)
+                          .map((r) => r.id),
+                        ...customRuleSets
+                          .filter((r) => r.target === resolveModuleFullName(mod))
+                          .map((r) => r.id),
+                      ],
                     );
                     const candidateRules = selectedRules.filter(
                       (r) => !existing.has(r.id),

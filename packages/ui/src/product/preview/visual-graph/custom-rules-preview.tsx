@@ -5,6 +5,11 @@ import { ArrowRight, Shield } from "lucide-react";
 import type { CustomRoutingRuleSetItem } from "@subboost/core/rules/custom-routing-rule-sets";
 import type { CustomRule } from "@subboost/core/types/config";
 
+function ruleTargetToText(target: CustomRule["target"]): string {
+  if (typeof target === "string") return target;
+  return `${target.kind}:${target.id}`;
+}
+
 export function CustomRulesPreview({
   customRules,
   ruleSets = [],
@@ -18,7 +23,7 @@ export function CustomRulesPreview({
         key: rule.id || `${rule.type}:${rule.value}`,
         type: rule.type,
         value: rule.value,
-        target: rule.target,
+        target: ruleTargetToText(rule.target),
         noResolve: Boolean(rule.noResolve),
         title: rule.value,
       })),

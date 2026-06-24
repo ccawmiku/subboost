@@ -8,6 +8,7 @@ import { Input } from "@subboost/ui/components/ui/input";
 import { Switch } from "@subboost/ui/components/ui/switch";
 import {
   buildGeneratedRuleEntries,
+  hasFullRuleOrderKeys,
   type GeneratedRuleEntry,
 } from "@subboost/core/generator/rules";
 import { useConfigStore } from "@subboost/ui/store/config-store";
@@ -42,28 +43,24 @@ export function RulesManagementSection({
   const {
     enabledProxyGroups,
     customRules,
-    customProxyGroups,
-    moduleRuleOverrides,
-    moduleRuleExclusions,
+    customRuleSets,
+    builtinRuleEdits,
     proxyGroupNameOverrides,
     cnIpNoResolve,
     experimentalCnUseCnRuleSet,
     ruleOrder,
     setRuleOrder,
-    allRulesOrderEditingEnabled,
-    setAllRulesOrderEditingEnabled,
   } = useConfigStore();
   const [orderDrafts, setOrderDrafts] = React.useState<Record<string, string>>({});
-  const allRulesMode = allRulesOrderEditingEnabled;
+  const allRulesMode = hasFullRuleOrderKeys(ruleOrder);
 
   const entries = React.useMemo(
     () =>
       buildGeneratedRuleEntries({
         enabledModules: enabledProxyGroups,
         customRules,
-        customProxyGroups,
-        moduleRuleOverrides,
-        moduleRuleExclusions,
+        customRuleSets,
+        builtinRuleEdits,
         proxyGroupNameOverrides,
         cnIpNoResolve,
         experimentalCnUseCnRuleSet,
@@ -71,23 +68,22 @@ export function RulesManagementSection({
       }),
     [
       cnIpNoResolve,
-      customProxyGroups,
+      customRuleSets,
       customRules,
       enabledProxyGroups,
       experimentalCnUseCnRuleSet,
-      moduleRuleOverrides,
-      moduleRuleExclusions,
+      builtinRuleEdits,
       proxyGroupNameOverrides,
       ruleOrder,
     ]
   );
 
-  const editableEntries = React.useMemo(() => entries.filter((entry) => entry.editable), [entries]);
   const preMatchEntries = React.useMemo(
     () => entries.filter((entry) => entry.key !== "special:match"),
     [entries]
   );
   const preMatchKeys = React.useMemo(() => preMatchEntries.map((entry) => entry.key), [preMatchEntries]);
+  const editableEntries = React.useMemo(() => entries.filter((entry) => entry.editable), [entries]);
   const editableKeys = React.useMemo(() => editableEntries.map((entry) => entry.key), [editableEntries]);
 
   const applyRuleOrder = React.useCallback(
@@ -135,7 +131,7 @@ export function RulesManagementSection({
   const handleToggleAllRulesMode = React.useCallback(
     async (checked: boolean) => {
       if (!checked) {
-        setAllRulesOrderEditingEnabled(false);
+        applyRuleOrder(editableKeys);
         return;
       }
 
@@ -157,9 +153,9 @@ export function RulesManagementSection({
         variant: "warning",
       });
       if (!ok) return;
-      setAllRulesOrderEditingEnabled(true);
+      applyRuleOrder(preMatchKeys);
     },
-    [setAllRulesOrderEditingEnabled]
+    [applyRuleOrder, editableKeys, preMatchKeys]
   );
 
   return (

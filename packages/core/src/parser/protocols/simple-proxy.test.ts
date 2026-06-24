@@ -15,6 +15,7 @@ describe("simple proxy parsers", () => {
     const colonAuth = parseHttp("http://colon.example.com:8080:user:p%40ss#Colon");
     const headerAlias = parseHttp("http://alias.example.com:8080?header=bad|:skip|X-Empty:&skip_cert_verify=no&peer=peer.example.com");
     const ipv6 = parseHttp("http://[2001:db8::1]:8080#IPv6");
+    const tlsVerified = parseHttp("http://verified.example.com:8080?tls-verification=true#Verified");
 
     expect(http).toMatchObject({
       name: "HTTP",
@@ -66,6 +67,10 @@ describe("simple proxy parsers", () => {
       server: "2001:db8::1",
       port: 8080,
     });
+    expect(tlsVerified).toMatchObject({
+      name: "Verified",
+      "skip-cert-verify": false,
+    });
   });
 
   it("parses SOCKS variants including encoded authority and encoded username auth", () => {
@@ -76,6 +81,7 @@ describe("simple proxy parsers", () => {
     const fromAuthorityNoAuth = parseSocks(`socks://${encodedNoAuth}`);
     const fromUsername = parseSocks(`socks5://${encodedAuth}@socks-auth.example.com:1080#Auth`);
     const tls = parseSocks("socks5+tls://carol:secret@socks-tls.example.com:443?udp=0&sni=socks.example.com#TLS");
+    const tlsVerified = parseSocks("socks5://verified-socks.example.com:1080?tls-verification=true#VerifiedSocks");
     const socks4 = parseSocks("socks4://dave@socks4.example.com?udp-relay=yes&allow_insecure=true#S4");
     const defaultName = parseSocks("socks5://socks-default.example.com:1080");
     const controlAuthority = parseSocks(`socks://${Buffer.from("\x00bad").toString("base64url")}#Control`);
@@ -103,6 +109,10 @@ describe("simple proxy parsers", () => {
       tls: true,
       udp: false,
       sni: "socks.example.com",
+    });
+    expect(tlsVerified).toMatchObject({
+      name: "VerifiedSocks",
+      "skip-cert-verify": false,
     });
     expect(socks4).toMatchObject({
       name: "S4",
@@ -135,6 +145,7 @@ describe("simple proxy parsers", () => {
       "ssh://root:secret@ssh.example.com:22?private-key=KEY&host-key=a,b&server-fingerprint=fp&idle-timeout=30&host-key-algorithms=ssh-ed25519|rsa&allow-insecure=1#SSH"
     );
     const sshAliases = parseSsh("ssh://alias@ssh-alias.example.com?private_key=KEY&hostKey=a;b&idle_timeout=bad#AliasSSH");
+    const sshEmptyHostKey = parseSsh("ssh://ssh-empty.example.com?host-key=,&private-key=KEY#EmptyHostKey");
 
     expect(naked).toMatchObject({
       name: "Naked",
@@ -168,6 +179,7 @@ describe("simple proxy parsers", () => {
       username: "user",
       password: "p:a:ss",
     });
+    expect(() => parseSimpleProxy("[2001:db8::2]:1080{IPv6 Naked}", "socks5")).toThrow("无效的端口号");
     expect(() => parseSimpleProxy("user@[2001:db8::1]{IPv6}", "socks5")).toThrow("缺少服务器地址");
     expect(ssh).toMatchObject({
       name: "SSH",
@@ -191,6 +203,96 @@ describe("simple proxy parsers", () => {
       "host-key": ["a", "b"],
     });
     expect(sshAliases).not.toHaveProperty("idle-timeout");
+    expect(sshEmptyHostKey).toMatchObject({
+      name: "EmptyHostKey",
+      "private-key": "KEY",
+    });
+    expect(sshEmptyHostKey).not.toHaveProperty("host-key");
+  });
+
+  it("keeps malformed suffixes and edge auth fields explicit in simple proxy forms", () => {
+    expect(parseSimpleProxy("suffix.example.com:8080}", "http")).toMatchObject({
+      name: "HTTP-suffix.example.com:8080",
+      server: "suffix.example.com",
+      port: 8080,
+    });
+    expect(parseSimpleProxy("nested.example.com:8080{bad}}", "http")).toMatchObject({
+      name: "HTTP-nested.example.com:8080",
+      server: "nested.example.com",
+      port: 8080,
+    });
+    expect(parseHttp("http://empty-headers.example.com:8080?headers= ")).not.toHaveProperty("headers");
+    expect(parseHttp("http://pipe.example.com:8080?headers=A:B||C:D")).toMatchObject({
+      headers: { A: "B", C: "D" },
+    });
+
+    const encodedHttp = Buffer.from("http-base.example.com:8080").toString("base64url");
+    expect(parseHttp(`http://${encodedHttp}?remark=EncodedName`)).toMatchObject({
+      name: "EncodedName",
+      server: "http-base.example.com",
+      port: 8080,
+    });
+
+    const encodedMissingPort = Buffer.from("alice:secret@socks-missing-port.example.com").toString("base64url");
+    expect(parseSocks(`socks://${encodedMissingPort}#MissingPort`)).toMatchObject({
+      name: "MissingPort",
+      server: encodedMissingPort,
+      port: 1080,
+    });
+
+    expect(parseSsh("ssh://ssh-minimal.example.com")).toMatchObject({
+      name: "SSH-ssh-minimal.example.com:22",
+      server: "ssh-minimal.example.com",
+      port: 22,
+    });
+    expect(parseHttp("https://forced.example.com")).toMatchObject({
+      type: "https",
+      port: 443,
+      tls: true,
+    });
+  });
+
+  it("covers standard URL branch fallbacks without changing compatibility behavior", () => {
+    const encodedUsernameOnly = Buffer.from("alice@base64-user.example.com:8080").toString("base64url");
+    const encodedHash = Buffer.from("hash-base.example.com:8080").toString("base64url");
+    const encodedSuffix = Buffer.from("suffix-base.example.com:8080").toString("base64url");
+    const encodedAuthWithoutColon = Buffer.from("only-user").toString("base64url");
+
+    expect(parseHttp(`http://${encodedUsernameOnly}#EncodedUser`)).toMatchObject({
+      name: "EncodedUser",
+      server: "base64-user.example.com",
+      port: 8080,
+      username: "alice",
+    });
+    expect(parseHttp(`http://${encodedHash}#HashName`)).toMatchObject({
+      name: "HashName",
+      server: "hash-base.example.com",
+      port: 8080,
+    });
+    expect(parseHttp(`http://${encodedSuffix}{SuffixName}`)).toMatchObject({
+      name: "SuffixName",
+      server: "suffix-base.example.com",
+      port: 8080,
+    });
+    expect(parseHttp('http://number-header.example.com:8080?headers={"A":1}')).not.toHaveProperty("headers");
+    expect(parseHttp("http://empty-bool.example.com:8080?allow-insecure=&tls-name=tls.example.com")).toMatchObject({
+      name: "HTTP-empty-bool.example.com:8080",
+      sni: "tls.example.com",
+    });
+    expect(parseSocks(`socks5://${encodedAuthWithoutColon}@encoded-user.example.com:1080#RawEncoded`)).toMatchObject({
+      name: "RawEncoded",
+      username: encodedAuthWithoutColon,
+      server: "encoded-user.example.com",
+    });
+    expect(() => parseSocks("socks://")).toThrow("缺少服务器地址");
+    expect(() => parseSocks("socks.example.com:1080")).toThrow("无效的 SOCKS 链接");
+    expect(() => parseHttp("http://badcolon.example.com:x:user:pass")).toThrow("无效的端口号");
+    expect(() => parseHttp("http://:8080:user:pass")).toThrow("缺少服务器地址");
+    expect(parseSimpleProxy("user@[2001:db8::1]x", "socks5")).toMatchObject({
+      username: "user",
+      server: "2001:db8::1",
+      port: 1080,
+    });
   });
 
   it("parses Telegram-style proxy links and keeps validation errors explicit", () => {
@@ -219,6 +321,11 @@ describe("simple proxy parsers", () => {
       server: "tg-secure.example.com",
       tls: true,
     });
+    expect(parseTelegramProxyLink("https://t.me/socks/proxy?server=tg-path.example.com&port=1080")).toMatchObject({
+      name: "SOCKS-tg-path.example.com:1080",
+      type: "socks5",
+      server: "tg-path.example.com",
+    });
 
     expect(() => parseSocks("http://example.com:1080")).toThrow("无效的 SOCKS 链接");
     expect(() => parseSimpleProxy("ftp://example.com:21")).toThrow("不支持的协议: ftp");
@@ -229,6 +336,7 @@ describe("simple proxy parsers", () => {
     expect(() => parseTelegramProxyLink("https://example.com/socks?server=x&port=1080")).toThrow(
       "无效的 Telegram 代理链接"
     );
+    expect(() => parseTelegramProxyLink("https://t.me/?server=x&port=1080")).toThrow("无效的 Telegram 代理链接");
     expect(() => parseTelegramProxyLink("tg://socks?port=1080")).toThrow("缺少服务器地址");
     expect(() => parseTelegramProxyLink("tg://socks?server=x&port=70000")).toThrow("无效的端口号");
   });

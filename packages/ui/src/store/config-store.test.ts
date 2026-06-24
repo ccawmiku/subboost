@@ -72,7 +72,7 @@ describe("useConfigStore", () => {
           hiddenProxyGroups: ["ai", "ai", "", 123],
           cnIpNoResolve: false,
         },
-        version: 9,
+        version: 10,
       }),
     });
     const { setConfigDraftUserScope, useConfigStore } = await loadStore(storage);

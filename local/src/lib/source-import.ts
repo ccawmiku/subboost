@@ -12,13 +12,20 @@ import {
   type SourceImportTransportRequest,
   type SourceImportTransportResult,
 } from "@subboost/server-core/subscription";
-import { isPrivateOrReservedIp } from "@subboost/server-core/subscription/ssrf-ip";
+import { resolveHostnameByDoh } from "@subboost/server-core/subscription/doh-resolver";
+import {
+  isPrivateOrReservedIp,
+  normalizeResolvedIpAddresses,
+  selectDnsAddressesAfterFakeIpRecheck,
+  shouldRecheckFakeIpDnsAnswers,
+} from "@subboost/server-core/subscription/ssrf-ip";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const USERINFO_TIMEOUT_MS = 8000;
 const USERINFO_MAX_BYTES = 256 * 1024;
 const MAX_REDIRECTS = 3;
+const DOH_TIMEOUT_MS = 4000;
 
 function headersToRecord(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {};
@@ -87,7 +94,15 @@ async function validatePublicFetchTarget(url: string): Promise<SourceImportTrans
   }
 
   const records = await lookup(hostname, { all: true, verbatim: true }).catch(() => []);
-  if (records.some((record) => isPrivateOrReservedIp(record.address))) {
+  const addresses = normalizeResolvedIpAddresses(records.map((record) => record.address));
+  const finalAddresses = shouldRecheckFakeIpDnsAnswers(addresses)
+    ? selectDnsAddressesAfterFakeIpRecheck(
+        addresses,
+        await resolveHostnameByDoh(hostname, { timeoutMs: DOH_TIMEOUT_MS })
+      )
+    : addresses;
+  const addressesToCheck = finalAddresses.length > 0 ? finalAddresses : addresses;
+  if (addressesToCheck.some((address) => isPrivateOrReservedIp(address))) {
     return toSecurityFailure("禁止访问本机或内网地址");
   }
 

@@ -93,11 +93,16 @@ function normalizeNoResolve(value: string): boolean | null {
   return value.trim().toLowerCase() === "no-resolve" ? true : null;
 }
 
+function getTargetKey(target: CustomRule["target"]): string {
+  if (typeof target === "string") return target.trim();
+  return `${target.kind}:${target.id.trim()}`;
+}
+
 function getRuleKey(rule: Pick<CustomRule, "type" | "value" | "target" | "noResolve">): string {
   return [
     rule.type,
     rule.value.trim(),
-    rule.target.trim(),
+    getTargetKey(rule.target),
     Boolean(rule.noResolve) ? "1" : "0",
   ].join("\u0000");
 }
@@ -250,7 +255,8 @@ export function parseCustomRuleBatchImport(
       return;
     }
 
-    if (!draft.target.trim()) {
+    const target = getTargetKey(draft.target);
+    if (!target) {
       errorCount += 1;
       items.push({
         lineNumber,
@@ -261,13 +267,13 @@ export function parseCustomRuleBatchImport(
       return;
     }
 
-    if (!targetSet.has(draft.target.trim())) {
+    if (!targetSet.has(target)) {
       errorCount += 1;
       items.push({
         lineNumber,
         raw: rawLine,
         status: "error",
-        message: `未知目标：${draft.target}`,
+        message: `未知目标：${target}`,
       });
       return;
     }
@@ -276,7 +282,7 @@ export function parseCustomRuleBatchImport(
       id: "",
       type: draft.type,
       value: draft.value.trim(),
-      target: draft.target.trim(),
+      target,
       noResolve: Boolean(draft.noResolve),
     };
     const key = getRuleKey(rule);

@@ -6,11 +6,41 @@ const { spawnSync } = require("node:child_process");
 const DEFAULT_IMAGE_REPOSITORY = "ghcr.io/subboost/subboost";
 const DEFAULT_OUTPUT = path.join("dist", "release-assets");
 const MANAGER_ASSET_NAME = "subboost-manager";
+const INSTALLER_DEFAULTS = [
+  {
+    arg: "--installer-release-url",
+    env: "SUBBOOST_INSTALLER_RELEASE_URL",
+    key: "installerReleaseUrl",
+    name: "DEFAULT_RELEASE_URL",
+    value: "https://github.com/SubBoost/subboost/releases/latest/download/release.json",
+  },
+  {
+    arg: "--installer-compose-url",
+    env: "SUBBOOST_INSTALLER_COMPOSE_URL",
+    key: "installerComposeUrl",
+    name: "DEFAULT_COMPOSE_URL",
+    value: "https://github.com/SubBoost/subboost/releases/latest/download/docker-compose.image.yml",
+  },
+  {
+    arg: "--installer-manager-url",
+    env: "SUBBOOST_INSTALLER_MANAGER_URL",
+    key: "installerManagerUrl",
+    name: "DEFAULT_MANAGER_URL",
+    value: "https://github.com/SubBoost/subboost/releases/latest/download/subboost-manager",
+  },
+  {
+    arg: "--installer-image",
+    env: "SUBBOOST_INSTALLER_IMAGE",
+    key: "installerImage",
+    name: "DEFAULT_IMAGE",
+    value: "ghcr.io/subboost/subboost:latest",
+  },
+];
 
 function usage() {
   return [
     "Usage:",
-    "  node scripts/selfhost-release-assets.cjs [--output <dir>] [--image <image>] [--image-tag <image>] [--base-url <url>] [--tag <vX.Y.Z>] [--build-sha <sha>] [--dry-run]",
+    "  node scripts/selfhost-release-assets.cjs [--output <dir>] [--image <image>] [--image-tag <image>] [--base-url <url>] [--tag <vX.Y.Z>] [--build-sha <sha>] [--installer-release-url <url>] [--installer-compose-url <url>] [--installer-manager-url <url>] [--installer-image <image>] [--dry-run]",
     "",
     "Creates release.json, install.sh, docker-compose.image.yml, and subboost-manager for GitHub Release assets.",
   ].join("\n");
@@ -27,6 +57,9 @@ function parseArgs(argv) {
     output: process.env.SUBBOOST_RELEASE_ASSET_OUTPUT || process.env.SUBBOOST_ONECLICK_OUTPUT || DEFAULT_OUTPUT,
     releaseTag: process.env.GITHUB_REF_NAME || "",
   };
+  for (const item of INSTALLER_DEFAULTS) {
+    args[item.key] = process.env[item.env] || "";
+  }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--base-url") {
@@ -52,10 +85,16 @@ function parseArgs(argv) {
     } else if (arg === "--tag" || arg === "--release-tag") {
       args.releaseTag = argv[index + 1] || "";
       index += 1;
-    } else if (arg === "--help" || arg === "-h") {
-      args.help = true;
     } else {
-      throw new Error(`Unknown argument: ${arg}`);
+      const installerDefault = INSTALLER_DEFAULTS.find((item) => item.arg === arg);
+      if (installerDefault) {
+        args[installerDefault.key] = argv[index + 1] || "";
+        index += 1;
+      } else if (arg === "--help" || arg === "-h") {
+        args.help = true;
+      } else {
+        throw new Error(`Unknown argument: ${arg}`);
+      }
     }
   }
   if (!args.help) {
@@ -67,6 +106,9 @@ function parseArgs(argv) {
       throw new Error("--tag cannot be empty.");
     }
     if (argv.includes("--build-sha") && !args.buildSha) throw new Error("--build-sha cannot be empty.");
+    for (const item of INSTALLER_DEFAULTS) {
+      if (argv.includes(item.arg) && !args[item.key]) throw new Error(`${item.arg} cannot be empty.`);
+    }
   }
   return args;
 }
@@ -123,6 +165,32 @@ function copyFile(publicRoot, from, to, options = {}) {
   fs.copyFileSync(source, to);
 }
 
+function replaceInstallerDefault(content, item, replacement) {
+  const expected = `${item.name}="${item.value}"`;
+  const replacementLine = `${item.name}="${replacement}"`;
+  const count = content.split(expected).length - 1;
+  if (count !== 1) {
+    throw new Error(`Expected exactly one ${item.name} assignment in install.sh, found ${count}.`);
+  }
+  return content.replace(expected, replacementLine);
+}
+
+function rewriteInstallerDefaults(content, args) {
+  let output = content;
+  for (const item of INSTALLER_DEFAULTS) {
+    const replacement = args[item.key];
+    if (replacement) output = replaceInstallerDefault(output, item, replacement);
+  }
+  return output;
+}
+
+function copyInstallScript(publicRoot, to, args) {
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  const source = path.join(publicRoot, "local/scripts/install.sh");
+  const content = fs.readFileSync(source, "utf8").replace(/\r\n/g, "\n");
+  fs.writeFileSync(to, rewriteInstallerDefaults(content, args), "utf8");
+}
+
 function createBundle(publicRoot, args) {
   const output = path.resolve(publicRoot, args.output);
   const manifest = buildManifest(publicRoot, args);
@@ -131,7 +199,7 @@ function createBundle(publicRoot, args) {
   fs.rmSync(output, { force: true, recursive: true });
   fs.mkdirSync(output, { recursive: true });
   copyFile(publicRoot, "local/docker-compose.image.yml", path.join(output, "docker-compose.image.yml"));
-  copyFile(publicRoot, "local/scripts/install.sh", path.join(output, "install.sh"), { normalizeLineEndings: true });
+  copyInstallScript(publicRoot, path.join(output, "install.sh"), args);
   copyFile(publicRoot, "local/scripts/subboost.sh", path.join(output, MANAGER_ASSET_NAME), { normalizeLineEndings: true });
   fs.chmodSync(path.join(output, "install.sh"), 0o755);
   fs.chmodSync(path.join(output, MANAGER_ASSET_NAME), 0o755);
@@ -169,5 +237,6 @@ module.exports = {
   MANAGER_ASSET_NAME,
   main,
   parseArgs,
+  rewriteInstallerDefaults,
   usage,
 };

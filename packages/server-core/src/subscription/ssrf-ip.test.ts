@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isPrivateOrReservedIp } from "./ssrf-ip";
+import {
+  isBenchmarkReservedIp,
+  isPrivateOrReservedIp,
+  normalizeResolvedIpAddresses,
+  selectDnsAddressesAfterFakeIpRecheck,
+  shouldRecheckFakeIpDnsAnswers,
+} from "./ssrf-ip";
 
 describe("SSRF IP classification", () => {
   it("marks private, reserved, and documentation IPv4 ranges as unsafe", () => {
@@ -46,5 +52,34 @@ describe("SSRF IP classification", () => {
     expect(isPrivateOrReservedIp("2001:db80::1")).toBe(false);
     expect(isPrivateOrReservedIp("::ffff:8.8.8.8")).toBe(false);
     expect(isPrivateOrReservedIp("::ffff:808:808")).toBe(false);
+  });
+
+  it("identifies the benchmark range commonly used by fake-ip DNS", () => {
+    expect(isBenchmarkReservedIp("198.18.0.1")).toBe(true);
+    expect(isBenchmarkReservedIp("198.19.255.254")).toBe(true);
+    expect(isBenchmarkReservedIp("198.20.0.1")).toBe(false);
+    expect(isBenchmarkReservedIp("10.0.0.1")).toBe(false);
+    expect(isBenchmarkReservedIp("example.test")).toBe(false);
+  });
+
+  it("normalizes resolved addresses before validation", () => {
+    expect(normalizeResolvedIpAddresses([" 198.18.3.6 ", "", "  ", 123 as never, "8.8.8.8"])).toEqual([
+      "198.18.3.6",
+      "8.8.8.8",
+    ]);
+  });
+
+  it("rechecks only fake-ip DNS answers and selects DoH results conservatively", () => {
+    expect(shouldRecheckFakeIpDnsAnswers(["198.18.3.6"])).toBe(true);
+    expect(shouldRecheckFakeIpDnsAnswers(["198.18.3.6", "198.19.1.1"])).toBe(true);
+    expect(shouldRecheckFakeIpDnsAnswers(["198.18.3.6", "10.0.0.1"])).toBe(false);
+    expect(shouldRecheckFakeIpDnsAnswers(["8.8.8.8"])).toBe(false);
+    expect(shouldRecheckFakeIpDnsAnswers([])).toBe(false);
+
+    expect(selectDnsAddressesAfterFakeIpRecheck(["198.18.3.6"], [" 93.184.216.34 "])).toEqual([
+      "93.184.216.34",
+    ]);
+    expect(selectDnsAddressesAfterFakeIpRecheck(["198.18.3.6"], [])).toEqual(["198.18.3.6"]);
+    expect(selectDnsAddressesAfterFakeIpRecheck(["8.8.8.8"], ["1.1.1.1"])).toEqual(["8.8.8.8"]);
   });
 });

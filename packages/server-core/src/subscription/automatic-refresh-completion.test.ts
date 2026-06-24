@@ -111,6 +111,34 @@ describe("automatic refresh completion helpers", () => {
     });
   });
 
+  it("uses fallback quota limits and rejects unknown failure reasons", () => {
+    const decision = resolveAutomaticRefreshCompletionDecision({
+      target: { ...target, username: null },
+      currentAutoUpdateState,
+      prepared: makePrepared({
+        ok: false,
+        reason: "node_quota_exceeded",
+        nodeCount: 101,
+      }),
+      attemptedAt,
+      maxNodesPerSubscription: 88,
+    });
+
+    expect(decision.outcome).toMatchObject({
+      status: "failed",
+      resultsError: "Subscription sub-1: Node quota exceeded (88)",
+    });
+    expect(() =>
+      resolveAutomaticRefreshCompletionDecision({
+        target,
+        currentAutoUpdateState,
+        prepared: makePrepared({ ok: false, reason: "unexpected" as never, nodeCount: 0 }),
+        attemptedAt,
+        maxNodesPerSubscription: 100,
+      })
+    ).toThrow("Unexpected refresh failure reason: unexpected");
+  });
+
   it("uses the cache timestamp for successful attempts", () => {
     const decision = resolveAutomaticRefreshCompletionDecision({
       target,
@@ -158,5 +186,46 @@ describe("automatic refresh completion helpers", () => {
     if (completion.outcome.status === "failed") {
       expect(completion.outcome.resultsError).toBe("Subscription sub-1 (ry): boom");
     }
+  });
+
+  it("summarizes minimal successful and unexpected failure outputs", () => {
+    const success = resolveAutomaticRefreshCompletionDecision({
+      target: { ...target, username: null, autoUpdateInterval: null },
+      currentAutoUpdateState,
+      prepared: makePrepared({
+        ok: true,
+        cacheEntry: { nodes: [], subscriptionInfo: {}, generatedYaml: "yaml" },
+        generatedYaml: "yaml",
+        nodeCount: undefined as never,
+      }),
+      attemptedAt,
+      maxNodesPerSubscription: 100,
+    });
+    expect(success.outcome).toMatchObject({
+      status: "updated",
+      updatedSubscription: {
+        username: null,
+        hosts: ["example.com"],
+      },
+    });
+    if (success.outcome.status === "updated") {
+      expect(success.outcome.updatedSubscription).not.toHaveProperty("nodeCount");
+    }
+
+    const unknown = resolveAutomaticRefreshUnexpectedFailureCompletion({
+      target: { ...target, username: null },
+      requestedHosts: [],
+      error: "bad",
+      attemptStartedAt: null,
+    });
+    expect(unknown.message).toBe("Unknown error");
+    expect(unknown).not.toHaveProperty("attemptedState");
+    expect(unknown.outcome).toMatchObject({
+      resultsError: "Subscription sub-1 (-): Unknown error",
+      failedSubscription: {
+        username: null,
+        error: "Unknown error",
+      },
+    });
   });
 });

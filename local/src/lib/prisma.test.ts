@@ -71,12 +71,12 @@ describe("local prisma singleton", () => {
     const mod = await loadPrismaModule({ DATABASE_URL: "   ", NODE_ENV: "production" });
 
     expect(mocks.PrismaPg).toHaveBeenCalledWith({
-      connectionString: "postgresql://subboost:subboost@localhost:5432/subboost_local?schema=public",
+      connectionString: "postgresql://subboost_local_dev:subboost_local_dev_password@localhost:5432/subboost_local_dev?schema=public",
     });
     expect(mocks.PrismaClient).toHaveBeenCalledWith({
       adapter: expect.objectContaining({
         adapterOptions: {
-          connectionString: "postgresql://subboost:subboost@localhost:5432/subboost_local?schema=public",
+          connectionString: "postgresql://subboost_local_dev:subboost_local_dev_password@localhost:5432/subboost_local_dev?schema=public",
         },
       }),
       log: ["error"],

@@ -116,7 +116,7 @@ export function InputSourceEditorDialog({
                                 <div className="font-medium text-white/80">注意开启后：</div>
                                 <ul className="ml-4 list-disc space-y-1">
                                   <li>无法在预览中查看/管理该 url 的节点</li>
-                                  <li>无法将这些节点用于中转代理组、筛选代理组等高级功能</li>
+                                  <li>无法将这些节点用于中转代理组、分流组高级模式等高级功能</li>
                                   <li>节点命名模板与 tag 在该模式下不生效</li>
                                 </ul>
                               </div>

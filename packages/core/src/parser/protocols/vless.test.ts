@@ -298,6 +298,84 @@ describe("parseVLESS", () => {
     expect(node).not.toHaveProperty("flow");
   });
 
+  it("keeps VLESS authority and xHTTP edge branches explicit", () => {
+    expect(parseVLESS(`vless://${UUID}@[2001:db8::1]:443?security=tls&type=ws&host=ipv6.example.com#IPv6`))
+      .toMatchObject({
+        name: "IPv6",
+        server: "2001:db8::1",
+        port: 443,
+        network: "ws",
+        "ws-opts": {
+          path: "/",
+          headers: { Host: "ipv6.example.com" },
+        },
+      });
+
+    const encoded = Buffer.from(`prefix:${UUID}@sr-flow.example.com:443`).toString("base64url");
+    expect(
+      parseVLESS(
+        `vless://${encoded}?obfs=websocket&tls=yes&flow=xtls-rprx-vision&obfsParam=NoColon%7C%3Abad%7CHost%3Acdn.example.com&path=%2F#Flow`
+      )
+    ).toMatchObject({
+      name: "Flow",
+      server: "sr-flow.example.com",
+      flow: "xtls-rprx-vision",
+      network: "ws",
+      "ws-opts": {
+        path: "/",
+        headers: { Host: "NoColon|:bad|Host:cdn.example.com" },
+      },
+    });
+
+    expect(
+      parseVLESS(
+        `vless://${UUID}@xhttp-fallback.example.com:443?security=tls&type=xhttp&path=&host=&headers=NoColon%7C%3Aempty%7CGood%3Ayes&no-grpc-header=maybe&download-headers=%7B%22bad%22%3A1%7D#XFallback`
+      )
+    ).toMatchObject({
+      name: "XFallback",
+      network: "xhttp",
+      "xhttp-opts": {
+        path: "/",
+        headers: { Good: "yes" },
+      },
+    });
+  });
+
+  it("handles VLESS authority probes and empty Shadowrocket websocket options", () => {
+    const encoded = Buffer.from(`${UUID}@sr-empty-options.example.com:443`).toString("base64url");
+
+    expect(parseVLESS(`vless://${UUID}@slash-authority.example.com:443/?type=ws#Slash`)).toMatchObject({
+      name: "Slash",
+      server: "slash-authority.example.com",
+      network: "ws",
+    });
+    expect(parseVLESS(`vless://${encoded}?obfs=websocket&obfsParam=%20&path=%3Fed%3D64#EmptyOptions`))
+      .toMatchObject({
+        name: "EmptyOptions",
+        server: "sr-empty-options.example.com",
+        network: "ws",
+        "ws-opts": {
+          path: "/",
+          headers: undefined,
+          "early-data-header-name": "Sec-WebSocket-Protocol",
+          "max-early-data": 64,
+        },
+      });
+
+    expect(() => parseVLESS(`vless://${UUID}@missing-host-port.example.com?x=1`)).toThrow();
+    expect(() => parseVLESS(`vless://${UUID}@empty-host-port.example.com:?x=1`)).toThrow();
+    expect(() => parseVLESS(`vless://${UUID}@bad-host-port.example.com:abc?x=1`)).toThrow();
+    expect(() => parseVLESS(`vless://${UUID}@[2001:db8::1?x=1`)).toThrow();
+    expect(() => parseVLESS(`vless://${UUID}@?x=1`)).toThrow();
+  });
+
+  it("rejects malformed Shadowrocket-style VLESS probes before normal parsing", () => {
+    const noQuery = Buffer.from(`${UUID}@shadow-no-query.example.com:443`).toString("base64url");
+
+    expect(() => parseVLESS(`vless://${noQuery}`)).toThrow("VLESS 配置缺少必要字段");
+    expect(() => parseVLESS(`vless://${UUID}@[2001:db8::1]?security=tls`)).toThrow("VLESS 配置缺少必要字段");
+  });
+
   it("rejects unsupported transports and ECH without plain TLS", () => {
     expect(() => parseVLESS(`vless://${UUID}@bad.example.com:443?type=kcp#Bad`)).toThrow("不支持的 VLESS 传输层");
     expect(() => parseVLESS(`vless://${UUID}@bad.example.com:443?security=reality&ech=config#Bad`)).toThrow(

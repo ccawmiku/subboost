@@ -27,7 +27,7 @@ describe("CustomRulesPreview", () => {
     const ruleSets: CustomRoutingRuleSetItem[] = [
       {
         key: "set-1",
-        source: { kind: "module", id: "reject" },
+        source: { kind: "custom-rule-set", id: "set-1" },
         id: "set-1",
         name: "private",
         behavior: "domain",
@@ -37,7 +37,7 @@ describe("CustomRulesPreview", () => {
       },
       {
         key: "set-2",
-        source: { kind: "module", id: "direct" },
+        source: { kind: "custom-rule-set", id: "set-2" },
         id: "set-2",
         name: "direct",
         behavior: "ipcidr",

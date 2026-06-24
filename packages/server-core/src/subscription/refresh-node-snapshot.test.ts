@@ -303,6 +303,112 @@ describe("refreshNodeSnapshot", () => {
     });
   });
 
+  it("ignores malformed deleted-node descriptors while preserving identical stable metadata", async () => {
+    const fetchUrlNodes = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        nodes: [{ ...node, name: "source a", server: "a.example.com" }],
+        headers: {
+          "profile-web-page-url": "https://same-profile.example.com/",
+          "plan-name": "Shared Plan",
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        nodes: [{ ...node, name: "source b", server: "b.example.com" }],
+        headers: {
+          "profile-web-page-url": "https://same-profile.example.com/",
+          "plan-name": "Shared Plan",
+        },
+      });
+
+    const result = await refreshNodeSnapshot({
+      config: {
+        deletedNodes: [null, ["bad"], { sourceId: "url-a", name: "Missing" }],
+        sources: [
+          { id: "url-a", type: "url", content: "https://a.example.com/sub" },
+          { id: "url-b", type: "url", content: "https://b.example.com/sub" },
+        ],
+      },
+      urls: [],
+      storedNodes: [],
+      fetchUrlNodes,
+    });
+
+    expect(result.subscriptionInfo).toMatchObject({
+      profileWebPageUrl: "https://same-profile.example.com/",
+      planName: "Shared Plan",
+    });
+    expect(result.usedUrlFetch).toBe(true);
+  });
+
+  it("skips provider supplemental fetches when no userinfo metadata is configured", async () => {
+    const fetchUrlUserInfo = vi.fn();
+
+    const result = await refreshNodeSnapshot({
+      config: {
+        sources: [
+          {
+            id: "provider",
+            type: "url",
+            content: "https://provider.example.com/sub",
+            useProxyProviders: true,
+          },
+        ],
+      },
+      urls: [],
+      storedNodes: [
+        {
+          ...node,
+          name: "provider node",
+          [SOURCE_IDS_KEY]: ["provider"],
+        } as ParsedNode,
+      ],
+      fetchUrlNodes: vi.fn(),
+      fetchUrlUserInfo,
+    });
+
+    expect(fetchUrlUserInfo).not.toHaveBeenCalled();
+    expect(result.detachedSourceCount).toBe(1);
+    expect(result.refreshedSourceCount).toBe(1);
+  });
+
+  it("merges supplemental stable metadata even when supplemental userinfo is absent", async () => {
+    const fetchUrlUserInfo = vi.fn(async () => ({
+      "profile-web-page-url": "https://supplemental.example.com/",
+      "plan-name": "Supplemental Plan",
+    }));
+
+    const result = await refreshNodeSnapshot({
+      config: {
+        sources: [
+          {
+            id: "url",
+            type: "url",
+            content: "https://url.example.com/sub",
+            userinfoUrl: "https://url.example.com/userinfo",
+          },
+        ],
+      },
+      urls: [],
+      storedNodes: [],
+      fetchUrlNodes: vi.fn(async () => ({
+        ok: true,
+        nodes: [{ ...node, name: "url node", server: "url.example.com" }],
+        headers: {},
+      })),
+      fetchUrlUserInfo,
+    });
+
+    expect(fetchUrlUserInfo).toHaveBeenCalledTimes(1);
+    expect(result.subscriptionInfo).toMatchObject({
+      profileWebPageUrl: "https://supplemental.example.com/",
+      planName: "Supplemental Plan",
+    });
+    expect(result.savedSources[0]).not.toHaveProperty("subscriptionUserInfo");
+  });
+
   it("merges URL userinfo from nodes while suppressing conflicted stable metadata", async () => {
     const fetchUrlNodes = vi
       .fn()

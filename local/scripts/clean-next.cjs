@@ -1,11 +1,13 @@
 const fs = require("node:fs");
 
-const removeOptions = {
-  recursive: true,
-  force: true,
-  maxRetries: process.platform === "win32" ? 30 : 3,
-  retryDelay: process.platform === "win32" ? 200 : 100,
-};
+function getRemoveOptions(platform = process.platform) {
+  return {
+    recursive: true,
+    force: true,
+    maxRetries: platform === "win32" ? 30 : 3,
+    retryDelay: platform === "win32" ? 200 : 100,
+  };
+}
 
 function isBusyError(error) {
   return error && ["EBUSY", "EPERM", "ENOTEMPTY"].includes(error.code);
@@ -28,30 +30,50 @@ function backupName(date = new Date()) {
   ].join("");
 }
 
-function removeDistDir(distDir) {
+function removeDistDir(distDir, deps = {}) {
+  const fsModule = deps.fs || fs;
+  const platform = deps.platform || process.platform;
+  const warn = deps.warn || console.warn;
   try {
-    fs.rmSync(distDir, removeOptions);
+    fsModule.rmSync(distDir, getRemoveOptions(platform));
     return;
   } catch (error) {
-    if (process.platform !== "win32" || !isBusyError(error)) throw error;
+    if (platform !== "win32" || !isBusyError(error)) throw error;
     if (distDir !== ".next") {
-      console.warn(`[clean-next] skipped locked backup directory ${distDir}`);
+      warn(`[clean-next] skipped locked backup directory ${distDir}`);
       return;
     }
-    const fallback = backupName();
-    fs.renameSync(distDir, fallback);
-    console.warn(`[clean-next] moved locked .next to ${fallback}; it will be removed on a later clean run.`);
+    const fallback = backupName(deps.now);
+    fsModule.renameSync(distDir, fallback);
+    warn(`[clean-next] moved locked .next to ${fallback}; it will be removed on a later clean run.`);
   }
 }
 
-const distDirs = [
-  ".next",
-  ...fs.readdirSync(process.cwd(), { withFileTypes: true })
+function listDistDirs(cwd = process.cwd(), fsModule = fs) {
+  return [
+    ".next",
+    ...fsModule.readdirSync(cwd, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && /^\.next\.bak-\d{8}-\d{6}$/.test(entry.name))
     .map((entry) => entry.name),
-];
-
-for (const distDir of distDirs) {
-  if (!fs.existsSync(distDir)) continue;
-  removeDistDir(distDir);
+  ];
 }
+
+function run(deps = {}) {
+  const fsModule = deps.fs || fs;
+  const cwd = deps.cwd || process.cwd();
+  for (const distDir of listDistDirs(cwd, fsModule)) {
+    if (!fsModule.existsSync(distDir)) continue;
+    removeDistDir(distDir, deps);
+  }
+}
+
+run();
+
+module.exports = {
+  backupName,
+  getRemoveOptions,
+  isBusyError,
+  listDistDirs,
+  removeDistDir,
+  run,
+};

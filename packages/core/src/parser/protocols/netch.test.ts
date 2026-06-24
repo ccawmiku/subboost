@@ -119,6 +119,31 @@ describe("parseNetch", () => {
         type: "snell",
         psk: "psk",
       });
+    expect(
+      parseNetch(
+        netch({
+          Type: "SS",
+          Hostname: "ss-no-plugin.example.com",
+          Port: 8388,
+          Password: "secret",
+          PluginOption: " ; =bad ; ",
+          EnableUDP: 1,
+          EnableTFO: " ",
+        })
+      )
+    ).toMatchObject({
+      name: "SS-ss-no-plugin.example.com:8388",
+      type: "ss",
+      udp: true,
+    });
+    expect(
+      parseNetch(netch({ Type: "SSR", Hostname: "ssr-default.example.com", Port: 8388, Password: "secret" }))
+    ).toMatchObject({
+      name: "SSR-ssr-default.example.com:8388",
+      type: "ssr",
+      protocol: "origin",
+      obfs: "plain",
+    });
   });
 
   it("parses VMess and Trojan transports", () => {
@@ -255,6 +280,37 @@ describe("parseNetch", () => {
       network: "tcp",
       sni: "trojan-tcp.example.com",
     });
+    expect(
+      parseNetch(
+        netch({
+          Type: "VMess",
+          Hostname: "vmess-h2-no-host.example.com",
+          Port: 443,
+          UserID: "11111111-1111-4111-8111-111111111111",
+          TransferProtocol: "h2",
+        })
+      )
+    ).toMatchObject({
+      network: "h2",
+      "h2-opts": { path: "/" },
+    });
+    expect(
+      parseNetch(
+        netch({
+          Type: "VMess",
+          Hostname: "vmess-http-no-host.example.com",
+          Port: 80,
+          UserID: "11111111-1111-4111-8111-111111111111",
+          TransferProtocol: "http",
+          Path: " ,/only",
+        })
+      )
+    ).toMatchObject({
+      network: "http",
+      "http-opts": {
+        path: ["/only"],
+      },
+    });
   });
 
   it("parses additional VMess and Trojan transport variants", () => {
@@ -305,6 +361,20 @@ describe("parseNetch", () => {
       "skip-cert-verify": true,
       "ws-opts": { path: "/" },
     });
+    expect(
+      parseNetch(netch({ Type: "Snell", Hostname: "snell-http.example.com", Port: 443, Password: "psk", OBFS: "http" }))
+    ).toMatchObject({
+      type: "snell",
+      "obfs-opts": { mode: "http" },
+    });
+    expect(parseNetch(netch({ Type: "Socks", Hostname: "socks-bare.example.com", Port: 1080 }))).toMatchObject({
+      type: "socks5",
+    });
+    expect(parseNetch(netch({ Type: "HTTPS", Hostname: "https-pass.example.com", Port: 443, Password: "p" }))).toMatchObject({
+      type: "https",
+      password: "p",
+      tls: true,
+    });
   });
 
   it("keeps Netch validation errors explicit", () => {
@@ -314,6 +384,7 @@ describe("parseNetch", () => {
     expect(() => parseNetch(netch({ Type: "SS", Hostname: "ss.example.com", Port: 8388 }))).toThrow("Netch SS 缺少 password");
     expect(() => parseNetch(netch({ Type: "SSR", Hostname: "ssr.example.com", Port: 8388 }))).toThrow("Netch SSR 缺少 password");
     expect(() => parseNetch(netch({ Type: "VMess", Hostname: "vmess.example.com", Port: 443 }))).toThrow("Netch VMess 缺少 uuid");
+    expect(() => parseNetch(netch({ Type: "Trojan", Hostname: "trojan.example.com", Port: 443 }))).toThrow("Netch Trojan 缺少 password");
     expect(() =>
       parseNetch(
         netch({

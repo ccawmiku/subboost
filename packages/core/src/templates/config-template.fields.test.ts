@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getModulesForTemplate } from "@subboost/core/generator/proxy-groups";
-import { validateSubBoostTemplateConfig } from "@subboost/core/templates/config-template";
+import { validateSubBoostTemplateConfig } from "./config-template";
 import { expectInvalid, validConfig } from "./config-template.test-helpers";
 
 describe("validateSubBoostTemplateConfig field validation", () => {
   it("rejects invalid dialer, module rule, scalar, and URL fields", () => {
-    const moduleId = getModulesForTemplate("minimal")[0];
-
     expectInvalid({ dialerProxyGroups: "bad" as never }, "dialerProxyGroups 必须是数组");
     expectInvalid({ dialerProxyGroups: [1 as never] }, "dialerProxyGroups 只能包含对象");
     expectInvalid(
@@ -44,7 +41,7 @@ describe("validateSubBoostTemplateConfig field validation", () => {
             {
               id: "relay",
               name: "Relay",
-              type: "fallback" as never,
+              type: "bad" as never,
               relayNodes: [],
               targetNodes: [],
             },
@@ -52,6 +49,24 @@ describe("validateSubBoostTemplateConfig field validation", () => {
         })
       )
     ).toEqual({ ok: false, error: "dialerProxyGroups.type 无效" });
+    const validDialerGroupType = validateSubBoostTemplateConfig(
+      validConfig({
+        dialerProxyGroups: [
+          {
+            id: "relay",
+            name: "Relay",
+            type: "load-balance",
+            strategy: "round-robin",
+            relayNodes: ["Relay A"],
+            targetNodes: ["Target A"],
+          },
+        ],
+      })
+    );
+    expect(validDialerGroupType.ok && validDialerGroupType.config.dialerProxyGroups[0]).toMatchObject({
+      type: "load-balance",
+      strategy: "round-robin",
+    });
     expectInvalid(
       {
         dialerProxyGroups: [
@@ -72,6 +87,35 @@ describe("validateSubBoostTemplateConfig field validation", () => {
           {
             id: "relay",
             name: "Relay",
+            type: "load-balance",
+            strategy: "bad" as never,
+            relayNodes: [],
+            targetNodes: [],
+          },
+        ],
+      },
+      "dialerProxyGroups.strategy 无效"
+    );
+    expectInvalid(
+      {
+        dialerProxyGroups: [
+          {
+            id: "relay",
+            name: "Relay",
+            type: "select",
+            relayNodes: [],
+            targetNodes: [1 as never],
+          },
+        ],
+      },
+      "dialerProxyGroups.targetNodes 只能包含字符串"
+    );
+    expectInvalid(
+      {
+        dialerProxyGroups: [
+          {
+            id: "relay",
+            name: "Relay",
             type: "select",
             relayNodes: [],
             targetNodes: [],
@@ -82,91 +126,157 @@ describe("validateSubBoostTemplateConfig field validation", () => {
       "dialerProxyGroups.enabled 必须是布尔值"
     );
 
-    expectInvalid({ moduleRuleOverrides: "bad" as never }, "moduleRuleOverrides 必须是对象");
+    expectInvalid({ customRuleSets: "bad" as never }, "customRuleSets 必须是数组");
     expectInvalid(
-      { moduleRuleOverrides: { unknown: [] } as never },
-      "moduleRuleOverrides 包含未知代理组"
-    );
-    expectInvalid(
-      { moduleRuleOverrides: { [moduleId]: "bad" } as never },
-      "moduleRuleOverrides 的值必须是数组"
-    );
-    expectInvalid(
-      { moduleRuleOverrides: { [moduleId]: [1] } as never },
-      "moduleRuleOverrides 只能包含对象"
+      { customRuleSets: [1 as never] },
+      "customRuleSets 只能包含对象"
     );
     expectInvalid(
       {
-        moduleRuleOverrides: {
-          [moduleId]: [
-            {
-              id: "bad",
-              name: "Bad",
-              behavior: "bad",
-              path: "geoip/private.mrs",
-            },
-          ],
-        } as never,
-      },
-      "moduleRuleOverrides.behavior 无效"
-    );
-    expect(
-      validateSubBoostTemplateConfig(
-        validConfig({
-          moduleRuleOverrides: {
-            [moduleId]: [
-              {
-                id: "bad",
-                name: "Bad",
-                behavior: "domain",
-                path: "https://rules.example.com/bad.mrs",
-              },
-            ],
+        customRuleSets: [
+          {
+            id: "",
+            name: "Bad",
+            behavior: "domain",
+            path: "geosite/private.mrs",
+            target: "DIRECT",
           },
-        })
-      )
-    ).toEqual({ ok: false, error: "moduleRuleOverrides.path 无效" });
+        ],
+      },
+      "customRuleSets.id 不能为空"
+    );
     expectInvalid(
       {
-        moduleRuleOverrides: {
-          [moduleId]: [
-            {
-              id: "bad",
-              name: "Bad",
-              behavior: "domain",
-              path: "geosite/private.mrs",
-              noResolve: "yes",
-            },
-          ],
-        } as never,
+        customRuleSets: [
+          {
+            id: "bad",
+            name: "",
+            behavior: "domain",
+            path: "geosite/private.mrs",
+            target: "DIRECT",
+          },
+        ],
       },
-      "moduleRuleOverrides.noResolve 必须是布尔值"
+      "customRuleSets.name 不能为空"
+    );
+    expectInvalid(
+      {
+        customRuleSets: [
+          {
+            id: "bad",
+            name: "Bad",
+            behavior: "bad" as never,
+            path: "geoip/private.mrs",
+            target: "DIRECT",
+          },
+        ],
+      },
+      "customRuleSets.behavior 无效"
+    );
+    expectInvalid(
+      {
+        customRuleSets: [
+          {
+            id: "bad",
+            name: "Bad",
+            behavior: "domain",
+            path: "plain/rule.txt",
+            target: "DIRECT",
+          },
+        ],
+      },
+      "customRuleSets.path 无效"
+    );
+    expectInvalid(
+      {
+        customRuleSets: [
+          {
+            id: "bad",
+            name: "Bad",
+            behavior: "domain",
+            path: "",
+            target: "DIRECT",
+          },
+        ],
+      },
+      "customRuleSets.path 不能为空"
+    );
+    expectInvalid(
+      {
+        customRuleSets: [
+          {
+            id: "bad",
+            name: "Bad",
+            behavior: "domain",
+            path: "geosite/private.mrs",
+            target: "",
+          },
+        ],
+      },
+      "customRuleSets.target 不能为空"
+    );
+    expectInvalid(
+      {
+        customRuleSets: [
+          {
+            id: "bad",
+            name: "Bad",
+            behavior: "domain",
+            path: "geosite/private.mrs",
+            target: "DIRECT",
+            noResolve: "yes" as never,
+          },
+        ],
+      },
+      "customRuleSets.noResolve 必须是布尔值"
     );
 
-    expectInvalid({ moduleRuleExclusions: "bad" as never }, "moduleRuleExclusions 必须是对象");
-    expect(
-      validateSubBoostTemplateConfig(
-        validConfig({
-          moduleRuleExclusions: {
-            unknown: ["rule"],
-          },
-        })
-      )
-    ).toEqual({ ok: false, error: "moduleRuleExclusions 包含未知代理组" });
+    expectInvalid({ builtinRuleEdits: "bad" as never }, "builtinRuleEdits 必须是对象");
     expectInvalid(
-      { moduleRuleExclusions: { [moduleId]: [1] } as never },
-      "moduleRuleExclusions 只能包含字符串"
+      {
+        builtinRuleEdits: {
+          "module:missing:rule": { enabled: false },
+        } as never,
+      },
+      "builtinRuleEdits 包含未知内置规则"
+    );
+    expectInvalid(
+      {
+        builtinRuleEdits: {
+          "module:cn:geolocation-cn": "bad",
+        } as never,
+      },
+      "builtinRuleEdits 的值必须是对象"
+    );
+    expectInvalid(
+      {
+        builtinRuleEdits: {
+          "module:cn:geolocation-cn": { target: 1 },
+        } as never,
+      },
+      "builtinRuleEdits.target 必须是字符串"
+    );
+    expectInvalid(
+      {
+        builtinRuleEdits: {
+          "module:cn:geolocation-cn": { enabled: true },
+        } as never,
+      },
+      "builtinRuleEdits.enabled 只能是 false"
     );
 
     expect(validateSubBoostTemplateConfig(validConfig({ allowLan: "yes" as never }))).toEqual({
       ok: false,
       error: "allowLan 必须是布尔值",
     });
-    expectInvalid({ allRulesOrderEditingEnabled: "yes" as never }, "allRulesOrderEditingEnabled 必须是布尔值");
     expectInvalid({ cnIpNoResolve: "yes" as never }, "cnIpNoResolve 必须是布尔值");
     expectInvalid(
       { experimentalCnUseCnRuleSet: "yes" as never },
       "experimentalCnUseCnRuleSet 必须是布尔值"
+    );
+    expectInvalid(
+      { proxyGroupAdvancedModeEnabled: "yes" as never },
+      "proxyGroupAdvancedModeEnabled 必须是布尔值"
     );
     expect(validateSubBoostTemplateConfig(validConfig({ dnsYaml: 1 as never }))).toEqual({
       ok: false,
@@ -176,6 +286,8 @@ describe("validateSubBoostTemplateConfig field validation", () => {
       ok: false,
       error: "testUrl 必须是 http(s) URL",
     });
+    expectInvalid({ testUrl: "" }, "testUrl 不能为空");
+    expectInvalid({ testInterval: 1.5 }, "testInterval 必须是正整数");
     expectInvalid({ ruleProviderBaseUrl: "ftp://example.com" }, "ruleProviderBaseUrl 必须是 http(s) URL");
     expectInvalid({ proxyGroupNameOverrides: "bad" as never }, "proxyGroupNameOverrides 必须是对象");
     expect(
@@ -187,5 +299,23 @@ describe("validateSubBoostTemplateConfig field validation", () => {
         })
       )
     ).toEqual({ ok: false, error: "proxyGroupNameOverrides 的值必须是字符串" });
+    expectInvalid({ ruleOrder: "bad" as never }, "ruleOrder 必须是数组");
+    expectInvalid({ ruleOrder: ["module:auto", 1 as never] }, "ruleOrder 只能包含字符串");
+    const defaultDialerStrategy = validateSubBoostTemplateConfig(
+      validConfig({
+        dialerProxyGroups: [
+          {
+            id: "relay",
+            name: "Relay",
+            type: "load-balance",
+            relayNodes: ["Relay"],
+            targetNodes: ["Target"],
+          },
+        ],
+      })
+    );
+    expect(defaultDialerStrategy.ok && defaultDialerStrategy.config.dialerProxyGroups[0]).toMatchObject({
+      strategy: "consistent-hashing",
+    });
   });
 });

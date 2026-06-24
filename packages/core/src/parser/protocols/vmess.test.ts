@@ -410,6 +410,83 @@ describe("parseVMess", () => {
       .toThrow("不支持的 VMess 传输层");
   });
 
+  it("covers malformed VMess style probes without accepting invalid authorities", () => {
+    const badShadowrocketNoQuery = Buffer.from(`auto:${UUID}@shadow-no-query.example.com:443`).toString("base64url");
+    const badShadowrocketBase = Buffer.from(`auto:${UUID}@shadow-bad.example.com:not-a-port`).toString("base64url");
+
+    expect(() => parseVMess(`vmess://${badShadowrocketNoQuery}`)).toThrow("无效的 VMess JSON 格式");
+    expect(() => parseVMess(`vmess://${badShadowrocketBase}?obfs=websocket`)).toThrow("VMess 配置缺少必要字段");
+  });
+
+  it("keeps sparse VMess defaults explicit across URI, JSON, and Shadowrocket forms", () => {
+    const shadowrocketBase = Buffer.from(`auto:${UUID}@shadow-default.example.com:443`).toString("base64url");
+    expect(parseVMess(`vmess://${shadowrocketBase}?network=grpc&tls=1&ech=&remarks=`)).toMatchObject({
+      name: "VMess shadow-default.example.com:443",
+      server: "shadow-default.example.com",
+      tls: true,
+      network: "grpc",
+      "grpc-opts": {
+        "grpc-service-name": "",
+      },
+    });
+
+    expect(
+      parseVMess(
+        `vmess://${UUID}@uri-grpc-path.example.com:443?type=grpc&security=tls&path=%2Ffrom-path&ech=#UriGrpcPath`
+      )
+    ).toMatchObject({
+      name: "UriGrpcPath",
+      network: "grpc",
+      "grpc-opts": {
+        "grpc-service-name": "from-path",
+      },
+      "ech-opts": { enable: true },
+    });
+
+    expect(
+      parseVMess(
+        `vmess://${toVmessPayload({
+          ps: "",
+          add: "json-none.example.com",
+          port: 80,
+          id: UUID,
+          aid: "",
+          net: "none",
+          scy: "",
+        })}`
+      )
+    ).toMatchObject({
+      name: "VMess 节点",
+      server: "json-none.example.com",
+      alterId: 0,
+      cipher: "auto",
+      network: "tcp",
+    });
+
+    expect(
+      parseVMess(
+        `vmess://${toVmessPayload({
+          ps: "Edge WS",
+          add: "edge-ws.example.com",
+          port: 443,
+          id: UUID,
+          aid: 0,
+          net: "ws",
+          tls: "tls",
+          edge: "edge-header",
+          path: "/",
+        })}`
+      )
+    ).toMatchObject({
+      name: "Edge WS",
+      network: "ws",
+      "ws-opts": {
+        path: "/",
+        headers: { Edge: "edge-header" },
+      },
+    });
+  });
+
   it("rejects unsupported transports and ECH without TLS", () => {
     const badShadowrocket = Buffer.from("bad").toString("base64url");
 

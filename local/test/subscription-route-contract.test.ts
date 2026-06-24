@@ -58,7 +58,6 @@ const fullConfigPayload = {
     customProxyGroups: [{ id: "group-1", name: "Custom", type: "select", proxies: ["node-a"] }],
     customRules: [{ id: "rule-1", type: "DOMAIN-SUFFIX", value: "example.com", target: "PROXY" }],
     ruleOrder: ["rule-1"],
-    allRulesOrderEditingEnabled: true,
     dialerProxyGroups: [{ proxyName: "node-a", dialerProxy: "relay-a" }],
     proxyGroupNameOverrides: { PROXY: "Proxy" },
     listenerPorts: { "node-a": 12000 },

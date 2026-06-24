@@ -87,6 +87,38 @@ describe("createNodeActions", () => {
     });
   });
 
+  it("keeps separate deleted-node records for duplicate origin names", () => {
+    const { actions, getState } = createHarness({
+      nodes: [
+        node("SOCKS-same.example.com:1080", {
+          _originName: "SOCKS-same.example.com:1080",
+          password: "one",
+        }),
+        node("SOCKS-same.example.com:1080 (2)", {
+          _originName: "SOCKS-same.example.com:1080",
+          password: "two",
+        }),
+      ],
+    });
+
+    actions.removeNode("SOCKS-same.example.com:1080");
+    actions.removeNode("SOCKS-same.example.com:1080 (2)");
+
+    expect(getState().deletedNodeNames).toEqual(["SOCKS-same.example.com:1080"]);
+    expect(getState().deletedNodes).toEqual([
+      expect.objectContaining({
+        originName: "SOCKS-same.example.com:1080",
+        name: "SOCKS-same.example.com:1080",
+        node: expect.objectContaining({ password: "one" }),
+      }),
+      expect.objectContaining({
+        originName: "SOCKS-same.example.com:1080",
+        name: "SOCKS-same.example.com:1080 (2)",
+        node: expect.objectContaining({ password: "two" }),
+      }),
+    ]);
+  });
+
   it("handles missing remove targets and restore metadata without cached nodes", () => {
     const { actions, getState } = createHarness({
       nodes: [node("Existing")],

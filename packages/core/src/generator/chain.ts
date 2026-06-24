@@ -8,14 +8,22 @@
 
 import type { ParsedNode } from "@subboost/core/types/node";
 import type { DialerProxyGroup } from "@subboost/core/types/template-config";
+import { DEFAULT_LOAD_BALANCE_STRATEGY, type ProxyGroupGroupType } from "@subboost/core/types/config";
 import { DEFAULT_SUBBOOST_CONFIG } from "@subboost/core/config/defaults";
+import { buildTypedProxyGroup, uniqueProxyNames } from "./proxy-group-type";
 
 export interface DialerProxyGroupConfig {
   id: string;
   name: string;
   relayNodes: string[];      // 中转节点
   targetNodes: string[];     // 使用此中转的目标节点
-  type: "select" | "url-test";
+  type: ProxyGroupGroupType;
+}
+
+function resolveDialerGroupProxies(group: DialerProxyGroup): string[] {
+  if (group.type === "direct-first") return uniqueProxyNames(["DIRECT", ...group.relayNodes]);
+  if (group.type === "reject-first") return uniqueProxyNames(["REJECT", ...group.relayNodes]);
+  return uniqueProxyNames(group.relayNodes);
 }
 
 /**
@@ -29,23 +37,19 @@ export function generateDialerProxyGroups(
 ): Array<Record<string, unknown>> {
   const providerUse = proxyProviderNames.length > 0 ? { use: proxyProviderNames } : {};
   return groups
-    .filter((g) => g.relayNodes.length > 0)
+    .map((group) => ({ group, proxies: resolveDialerGroupProxies(group) }))
+    .filter(({ proxies }) => proxies.length > 0)
     .map((group) => {
-      const base: Record<string, unknown> = {
-        name: group.name,
-        type: group.type,
-        proxies: group.relayNodes,
-        ...providerUse,
-      };
-
-      // url-test 类型需要额外配置
-      if (group.type === "url-test") {
-        base.url = testUrl;
-        base.interval = testInterval;
-        base.lazy = true;
-      }
-
-      return base;
+      return buildTypedProxyGroup({
+        name: group.group.name,
+        groupType: group.group.type,
+        proxies: group.proxies,
+        testUrl,
+        testInterval,
+        strategy: group.group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
+        extraFields: providerUse,
+        urlTestLazy: true,
+      });
     });
 }
 

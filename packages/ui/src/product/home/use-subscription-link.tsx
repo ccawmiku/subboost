@@ -7,14 +7,11 @@ import {
   getNodeSourceIds,
   type SubscriptionSource,
   type DialerProxyGroup,
-  type ModuleRuleExclusions,
-  type ModuleRuleOverride,
 } from "@subboost/ui/store/config-store";
-import type { CustomRule, CustomProxyGroup } from "@subboost/core/types/config";
+import type { BuiltinRuleEdits, CustomRule, CustomProxyGroup, CustomRuleSet } from "@subboost/core/types/config";
 import type { User } from "@subboost/ui/store/user-store";
 import { useConfigStore } from "@subboost/ui/store/config-store";
 import { captureAuthConfigHandoff } from "@subboost/ui/store/config-store/auth-handoff";
-import type { FilteredProxyGroup } from "@subboost/core/types/filtered-proxy-group";
 import {
   hasSubscriptionUserInfo,
   mergeSubscriptionUserInfo,
@@ -79,10 +76,9 @@ type Options = {
   hiddenProxyGroups: string[];
   customRules: CustomRule[];
   customProxyGroups: CustomProxyGroup[];
+  customRuleSets: CustomRuleSet[];
+  builtinRuleEdits: BuiltinRuleEdits;
   ruleOrder: string[];
-  allRulesOrderEditingEnabled: boolean;
-  moduleRuleOverrides: Record<string, ModuleRuleOverride[]>;
-  moduleRuleExclusions: ModuleRuleExclusions;
   moduleRuleEditWarningAccepted: boolean;
   dialerProxyGroups: DialerProxyGroup[];
   proxyGroupNameOverrides: Record<string, string>;
@@ -114,10 +110,9 @@ export function useSubscriptionLink({
   hiddenProxyGroups,
   customRules,
   customProxyGroups,
+  customRuleSets,
+  builtinRuleEdits,
   ruleOrder,
-  allRulesOrderEditingEnabled,
-  moduleRuleOverrides,
-  moduleRuleExclusions,
   moduleRuleEditWarningAccepted,
   dialerProxyGroups,
   proxyGroupNameOverrides,
@@ -383,11 +378,11 @@ export function useSubscriptionLink({
             hiddenProxyGroups,
             customRules,
             ruleOrder,
-            allRulesOrderEditingEnabled,
             customProxyGroups,
-            filteredProxyGroups: useConfigStore.getState().filteredProxyGroups as FilteredProxyGroup[],
-            moduleRuleOverrides,
-            moduleRuleExclusions,
+            customRuleSets,
+            builtinRuleEdits,
+            proxyGroupAdvanced: useConfigStore.getState().proxyGroupAdvanced,
+            proxyGroupAdvancedModeEnabled: Boolean(useConfigStore.getState().proxyGroupAdvancedModeEnabled),
             moduleRuleEditWarningAccepted,
             dialerProxyGroups,
             proxyGroupNameOverrides,
@@ -466,9 +461,10 @@ export function useSubscriptionLink({
     cnIpNoResolve,
     experimentalCnUseCnRuleSet,
     customProxyGroups,
+    customRuleSets,
+    builtinRuleEdits,
     customRules,
     ruleOrder,
-    allRulesOrderEditingEnabled,
     deletedNodeNames,
     deletedNodes,
     dialerProxyGroups,
@@ -481,8 +477,6 @@ export function useSubscriptionLink({
     listenerPorts,
     goToLogin,
     moduleRuleEditWarningAccepted,
-    moduleRuleExclusions,
-    moduleRuleOverrides,
     nodes,
     proxyGroupNameOverrides,
     ruleProviderBaseUrl,

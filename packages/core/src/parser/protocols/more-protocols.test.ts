@@ -68,6 +68,18 @@ describe("additional protocol parser contracts", () => {
       "min-idle-session": 4,
       "padding-scheme": "pad",
     });
+    expect(
+      parseAnyTLS(
+        "anytls://host-token.example.com?auth=secret&udp=1&alpn=,,&idle-session-check-interval=&idleSessionCheckInterval=15"
+      )
+    ).toMatchObject({
+      name: "AnyTLS-host-token.example.com:443",
+      server: "host-token.example.com",
+      password: "secret",
+      udp: true,
+      sni: "host-token.example.com",
+      "idle-session-check-interval": 15,
+    });
 
     expect(() => parseAnyTLS("anytls://secret@anytls.example.com:443?security=xtls")).toThrow(
       "AnyTLS 不支持 security=xtls"

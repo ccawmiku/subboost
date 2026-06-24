@@ -13,6 +13,7 @@ import {
   Shield,
   Zap,
 } from "lucide-react";
+import type { ProxyGroupGroupType } from "@subboost/core/types/config";
 import { cn } from "@subboost/ui/lib/utils";
 
 export type VisualDisplayGroup = {
@@ -26,7 +27,7 @@ export type VisualDisplayGroup = {
   dialer?: {
     relayNodes: string[];
     targetNodes: string[];
-    type: "select" | "url-test";
+    type: ProxyGroupGroupType;
   };
 };
 

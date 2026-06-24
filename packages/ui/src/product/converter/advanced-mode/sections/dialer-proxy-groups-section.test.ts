@@ -66,6 +66,7 @@ vi.mock("lucide-react", () => ({
   Plus: () => null,
   Search: () => null,
   Shuffle: () => null,
+  SlidersHorizontal: () => null,
   Trash2: () => null,
   X: () => null,
 }));
@@ -74,6 +75,24 @@ vi.mock("@subboost/ui/components/ui/button", () => ({
   Button: (props: any) => {
     mocks.captures.buttons.push(props);
     return null;
+  },
+}));
+vi.mock("@subboost/ui/components/ui/dropdown-menu", () => ({
+  DropdownMenu: (props: any) => props.children,
+  DropdownMenuTrigger: (props: any) => props.children,
+  DropdownMenuContent: (props: any) => {
+    mocks.captures.dropdownContents.push(props);
+    return props.children;
+  },
+  DropdownMenuItem: (props: any) => {
+    mocks.captures.menuItems.push(props);
+    return props.children;
+  },
+  DropdownMenuSub: (props: any) => props.children,
+  DropdownMenuSubContent: (props: any) => props.children,
+  DropdownMenuSubTrigger: (props: any) => {
+    mocks.captures.menuItems.push(props);
+    return props.children;
   },
 }));
 vi.mock("@subboost/ui/components/ui/input", () => ({
@@ -152,6 +171,8 @@ function renderSection(overrides: Record<number, unknown> = {}, props = { isExpa
   mocks.captures.buttons = [];
   mocks.captures.inputs = [];
   mocks.captures.switches = [];
+  mocks.captures.menuItems = [];
+  mocks.captures.dropdownContents = [];
   mocks.captures.intrinsics = [];
   try {
     const html = renderToStaticMarkup(React.createElement(DialerProxyGroupsSection, props));
@@ -183,15 +204,10 @@ function findIntrinsics(type: string, predicate: (props: any) => boolean) {
 describe("DialerProxyGroupsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.captures = { buttons: [], inputs: [], switches: [], intrinsics: [] };
+    mocks.captures = { buttons: [], dropdownContents: [], inputs: [], menuItems: [], switches: [], intrinsics: [] };
     mocks.store = {
       nodes,
       dialerProxyGroups: [groupA, groupB],
-      filteredProxyGroups: [
-        { name: "Filtered A", enabled: true },
-        { name: "Filtered Disabled", enabled: false },
-        { name: " ", enabled: true },
-      ],
       customProxyGroups: [{ name: "Custom" }],
       proxyGroupNameOverrides: { auto: "Auto Override" },
       addDialerProxyGroup: vi.fn(),
@@ -255,12 +271,6 @@ describe("DialerProxyGroupsSection", () => {
     mocks.store.customProxyGroups = [
       { name: "" },
       { name: 123 },
-    ];
-    mocks.store.filteredProxyGroups = [
-      null,
-      { name: 123, enabled: true },
-      { name: " ", enabled: true },
-      { name: "Filtered A", enabled: true },
     ];
     mocks.store.dialerProxyGroups = [
       { ...groupA, name: " " },
@@ -334,6 +344,21 @@ describe("DialerProxyGroupsSection", () => {
     expect(mocks.store.updateDialerProxyGroup).toHaveBeenCalledWith("g-a", { enabled: false });
     mocks.captures.switches[0].onClick({ stopPropagation: vi.fn() });
 
+    const groupTypeButton = mocks.captures.buttons.find((props: any) => props["aria-label"] === "修改 Group A 类型");
+    expect(groupTypeButton).toEqual(expect.objectContaining({ title: "类型：手动选择" }));
+    groupTypeButton.onClick({ stopPropagation: vi.fn() });
+    const autoTypeItem = mocks.captures.menuItems.find((props: any) => textOf(props.children).includes("自动测速"));
+    autoTypeItem.onSelect();
+    expect(mocks.store.updateDialerProxyGroup).toHaveBeenCalledWith("g-a", { type: "url-test", strategy: undefined });
+
+    const fallbackTypeItem = mocks.captures.menuItems.find((props: any) => textOf(props.children).includes("故障切换"));
+    fallbackTypeItem.onSelect();
+    expect(mocks.store.updateDialerProxyGroup).toHaveBeenCalledWith("g-a", { type: "fallback", strategy: undefined });
+
+    const roundRobinTypeItem = mocks.captures.menuItems.find((props: any) => textOf(props.children).includes("轮询均摊"));
+    roundRobinTypeItem.onSelect();
+    expect(mocks.store.updateDialerProxyGroup).toHaveBeenCalledWith("g-a", { type: "load-balance", strategy: "round-robin" });
+
     mocks.captures.switches[1].onCheckedChange(true);
     expect(mocks.store.updateDialerProxyGroup).toHaveBeenCalledWith("g-b", {
       enabled: true,
@@ -354,7 +379,7 @@ describe("DialerProxyGroupsSection", () => {
 
   it("enables disabled groups without conflicts and with relay-only cleanup", () => {
     mocks.store.dialerProxyGroups = [
-      { ...groupA, relayNodes: ["Filtered A"], targetNodes: ["Alpha"] },
+      { ...groupA, relayNodes: ["Custom"], targetNodes: ["Alpha"] },
       { ...groupB, enabled: false, relayNodes: ["DIRECT", "Gamma"], targetNodes: ["Beta"] },
     ];
     renderSection();
@@ -397,7 +422,7 @@ describe("DialerProxyGroupsSection", () => {
     const relayInput = mocks.captures.inputs.find((props: any) => props.placeholder === "搜索中转节点...");
     const targetInput = mocks.captures.inputs.find((props: any) => props.placeholder === "搜索落地节点...");
 
-    relayInput.onChange({ target: { value: "filtered" } });
+    relayInput.onChange({ target: { value: "custom" } });
     targetInput.onChange({ target: { value: "beta" } });
     relayInput.onClick({ stopPropagation: vi.fn() });
     targetInput.onClick({ stopPropagation: vi.fn() });

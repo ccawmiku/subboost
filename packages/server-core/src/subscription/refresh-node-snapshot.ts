@@ -6,6 +6,7 @@ import {
 } from "@subboost/core/subscription/node-source-state";
 import {
   detachSourceNodesFromState,
+  type DeletedNodeDescriptor,
   mergeParsedSourceNodes,
   prepareSourceParsedNodes,
 } from "@subboost/core/subscription/source-node-refresh";
@@ -82,6 +83,13 @@ function getDeletedNodeNames(config: Record<string, unknown>): string[] {
     .filter(Boolean);
 }
 
+function getDeletedNodes(config: Record<string, unknown>): DeletedNodeDescriptor[] {
+  if (!Array.isArray(config.deletedNodes)) return [];
+  return (config.deletedNodes as unknown[]).filter(
+    (item): item is DeletedNodeDescriptor => Boolean(item) && typeof item === "object" && !Array.isArray(item)
+  );
+}
+
 export function resolveSmartNodeMatchingEnabled(config: Record<string, unknown>): boolean {
   return config.smartNodeMatchingEnabled !== false;
 }
@@ -112,6 +120,7 @@ export async function refreshNodeSnapshot(
   let refreshedSavedSources = savedSources.map((source) => ({ ...source }));
   const validSourceIds = new Set(savedSources.map((source) => source.id));
   const deletedNodeNames = getDeletedNodeNames(options.config);
+  const deletedNodes = getDeletedNodes(options.config);
   const smartNodeMatchingEnabled = resolveSmartNodeMatchingEnabled(options.config);
 
   let currentNodes = options.storedNodes
@@ -267,6 +276,7 @@ export async function refreshNodeSnapshot(
             source.lastParsedContent.trim() !== source.content.trim()
         ),
         smartNodeMatchingEnabled,
+        deletedNodes,
       });
 
       currentNodes = merged.nodes;
@@ -300,6 +310,7 @@ export async function refreshNodeSnapshot(
         lastNameTemplate: source.lastParsedNameTemplate,
         treatAsNewSource: false,
         smartNodeMatchingEnabled,
+        deletedNodes,
       });
 
       currentNodes = merged.nodes;

@@ -169,6 +169,7 @@ describe("custom routing rule set contracts", () => {
   it("normalizes rule set targets, paths, and URLs", () => {
     expect(getRuleSetTargetValue({ kind: "module", id: "select" })).toBe("module:select");
     expect(parseRuleSetTargetValue(" custom: group-a ")).toEqual({ kind: "custom", id: "group-a" });
+    expect(parseRuleSetTargetValue(" filtered: fast ")).toBeNull();
     expect(parseRuleSetTargetValue("module:")).toBeNull();
     expect(parseRuleSetTargetValue("bad:value")).toBeNull();
     expect(extractRuleSetPathFromUrl("https://example.com/geo/geosite/youtube.mrs?raw=1")).toBe(
@@ -189,38 +190,44 @@ describe("custom routing rule set contracts", () => {
       proxyGroupNameOverrides: {
         [moduleId]: "Renamed",
       },
-      moduleRuleOverrides: {
-        [moduleId]: [
-          {
-            id: "private",
-            name: "",
-            behavior: "ipcidr",
-            path: "https://rules.example.com/geo/geoip/private.mrs",
-            noResolve: true,
-          },
-        ],
-      },
       customProxyGroups: [
         {
           id: "custom",
           name: "Custom",
           emoji: "C",
           groupType: "select",
-          rules: [
-            {
-              id: "youtube",
-              name: "YouTube",
-              behavior: "domain",
-              url: "https://rules.example.com/geo/geosite/youtube.mrs?download=1",
-            },
-          ],
+        },
+      ],
+      customRuleSets: [
+        {
+          id: "private",
+          name: "",
+          behavior: "ipcidr",
+          path: "https://rules.example.com/geo/geoip/private.mrs",
+          target: "🚀 Renamed",
+          noResolve: true,
+        },
+        {
+          id: "youtube",
+          name: "YouTube",
+          behavior: "domain",
+          path: "https://rules.example.com/geo/geosite/youtube.mrs?download=1",
+          target: "Custom",
+        },
+        {
+          id: "telegram",
+          name: "Telegram",
+          behavior: "ipcidr",
+          path: "geoip/telegram.mrs",
+          target: { kind: "custom", id: "custom" },
+          noResolve: true,
         },
       ],
     });
 
     expect(items).toContainEqual({
-      key: `module:${moduleId}:private`,
-      source: { kind: "module", id: moduleId },
+      key: "custom-rule-set:private",
+      source: { kind: "custom-rule-set", id: "private" },
       id: "private",
       name: "private",
       behavior: "ipcidr",
@@ -234,8 +241,8 @@ describe("custom routing rule set contracts", () => {
       noResolve: true,
     });
     expect(items).toContainEqual({
-      key: "custom:custom:youtube",
-      source: { kind: "custom", id: "custom" },
+      key: "custom-rule-set:youtube",
+      source: { kind: "custom-rule-set", id: "youtube" },
       id: "youtube",
       name: "YouTube",
       behavior: "domain",
@@ -247,6 +254,13 @@ describe("custom routing rule set contracts", () => {
         value: "custom:custom",
       },
       noResolve: false,
+    });
+    expect(items.filter((item) => item.id === "telegram")).toHaveLength(1);
+    expect(items.find((item) => item.id === "telegram")?.target).toMatchObject({
+      kind: "custom",
+      id: "custom",
+      name: "Custom",
+      value: "custom:custom",
     });
   });
 

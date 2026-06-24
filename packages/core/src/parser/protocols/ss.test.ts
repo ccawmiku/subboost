@@ -54,9 +54,11 @@ describe("parseSS", () => {
 
   it("parses empty bool query flags and ignores invalid v2ray-plugin JSON", () => {
     const boolFlags = parseSS("ss://aes-128-gcm:secret@bool.example.com:8388?uot=&tfo=#Bool");
+    const invalidFlags = parseSS("ss://aes-128-gcm:secret@flags.example.com:8388?uot=maybe&tfo=0#Flags");
     const invalidJson = parseSS(
       `ss://aes-128-gcm:secret@plain.example.com:8388?v2ray-plugin=${encodeURIComponent("not-json")}#Plain`
     );
+    const emptyJson = parseSS("ss://aes-128-gcm:secret@empty-json.example.com:8388?v2ray-plugin=   #EmptyJSON");
 
     expect(boolFlags).toMatchObject({
       name: "Bool",
@@ -64,11 +66,18 @@ describe("parseSS", () => {
       "udp-over-tcp": true,
       tfo: true,
     });
+    expect(invalidFlags).toMatchObject({
+      name: "Flags",
+      server: "flags.example.com",
+    });
+    expect(invalidFlags).not.toHaveProperty("udp-over-tcp");
+    expect(invalidFlags).not.toHaveProperty("tfo");
     expect(invalidJson).toMatchObject({
       name: "Plain",
       server: "plain.example.com",
     });
     expect(invalidJson).not.toHaveProperty("plugin");
+    expect(emptyJson).not.toHaveProperty("plugin");
   });
 
   it("normalizes plugin names and rejects malformed links", () => {
@@ -92,9 +101,25 @@ describe("parseSS", () => {
       plugin: "gost-plugin",
       pluginOpts: { tls: true, mux: false, extra: "keep" },
     });
+    expect(normalizeSsPlugin("gost-plugin", { tls: true, mux: 1 })).toEqual({
+      plugin: "gost-plugin",
+      pluginOpts: { tls: true, mux: true },
+    });
+    expect(normalizeSsPlugin("gost-plugin", { tls: "", mux: 2 })).toEqual({
+      plugin: "gost-plugin",
+      pluginOpts: { tls: "", mux: 2 },
+    });
     expect(normalizeSsPlugin("xray-plugin", { tls: "off", mux: "maybe" })).toEqual({
       plugin: "xray-plugin",
       pluginOpts: { tls: false, mux: "maybe" },
+    });
+    expect(normalizeSsPlugin("xray-plugin", { tls: false, mux: "on" })).toEqual({
+      plugin: "xray-plugin",
+      pluginOpts: { tls: false, mux: true },
+    });
+    expect(normalizeSsPlugin("xray-plugin", { tls: {}, mux: null })).toEqual({
+      plugin: "xray-plugin",
+      pluginOpts: { tls: {}, mux: null },
     });
     expect(normalizeSsPlugin("simple-obfs", { mode: "", host: "" })).toEqual({
       plugin: "obfs",
@@ -119,6 +144,21 @@ describe("parseSS", () => {
         host: "cdn;edge.example.com",
       },
       tfo: true,
+    });
+    expect(
+      parseSS(
+        `ss://${b64("aes-128-gcm:secret")}@empty-plugin.example.com:8388?plugin=${encodeURIComponent(
+          String.raw`obfs-local;%20;empty=`
+        )}#EmptyPlugin`
+      )
+    ).toMatchObject({
+      name: "EmptyPlugin",
+      plugin: "obfs",
+    });
+    expect(parseSS(`ss://${b64("aes-128-gcm:secret@[2001:db8::2]:8388")}#FullIPv6`)).toMatchObject({
+      name: "FullIPv6",
+      server: "2001:db8::2",
+      port: 8388,
     });
 
     expect(() => parseSS("http://bad")).toThrow("无效的 SS 链接");

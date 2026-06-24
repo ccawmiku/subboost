@@ -137,8 +137,8 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     module: cnModule,
     enabledProxyGroups: ["cn", "auto"],
     hiddenProxyGroups: ["hidden"],
-    moduleRuleOverrides: {},
-    moduleRuleExclusions: {},
+    ruleSetsByTarget: {},
+    hiddenPresetRuleIds: {},
     customProxyGroups: [{ id: "custom-1", name: "Custom Group", rules: [] }],
     manualRules: [],
     manualRuleTargets: [{ name: "Auto" }],
@@ -153,6 +153,7 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     onMoveManualRule: vi.fn(),
     onRemoveManualRule: vi.fn(),
     onRestoreRule: vi.fn(),
+    onResetRuleTarget: vi.fn(),
     cnIpNoResolve: true,
     onChangeCnIpNoResolve: vi.fn(),
     experimentalCnUseCnRuleSet: true,
@@ -225,8 +226,8 @@ describe("ProxyGroupsModuleRulesPanel", () => {
     await flushAsyncWork();
     expect(props.onMoveRule).toHaveBeenCalledWith("cn-ip", { kind: "custom", id: "custom-1" });
 
-    mocks.captures.buttons.find((button) => button["aria-label"] === "恢复 Removed 规则集").onClick();
-    expect(props.onRestoreRule).toHaveBeenCalledWith("removed-rule");
+    mocks.captures.buttons.find((button) => button["aria-label"] === "恢复默认目标 Removed 规则集").onClick();
+    expect(props.onResetRuleTarget).toHaveBeenCalledWith("removed-rule");
 
     mocks.captures.manualRows[0].onMove(mocks.captures.manualRows[0].item, { name: "自动选择" });
     expect(props.onMoveManualRule).toHaveBeenCalledWith("manual-1", "自动选择");
@@ -287,7 +288,7 @@ describe("ProxyGroupsModuleRulesPanel", () => {
 
   it("normalizes exclusion keys and cleans up candidate rule loading paths", async () => {
     const props = baseProps({
-      moduleRuleExclusions: { cn: [" removed-rule ", " "], auto: ["auto-rule"] },
+      hiddenPresetRuleIds: { cn: [" removed-rule ", " "], auto: ["auto-rule"] },
     });
     renderPanel(props);
     await flushAsyncWork();
@@ -318,7 +319,7 @@ describe("ProxyGroupsModuleRulesPanel", () => {
       { id: "fallback-name", name: "   ", behavior: "domain", path: "rule-set/fallback.mrs", parentRuleId: 123 },
       { id: "parent-module", name: "Parent Module", behavior: "domain", path: "rule-set/parent.mrs", parentModuleId: "cn" },
     ]);
-    renderPanel(baseProps({ enabledProxyGroups: [" ", ""], moduleRuleExclusions: undefined }));
+    renderPanel(baseProps({ enabledProxyGroups: [" ", ""], hiddenPresetRuleIds: undefined }));
     await flushAsyncWork();
     expect((stateMock.setters[0] as any).lastValue).toEqual([
       { id: "fallback-name", name: "fallback-name", behavior: "domain", path: "rule-set/fallback.mrs", parentRuleId: undefined, parentModuleId: undefined },
@@ -389,7 +390,7 @@ describe("ProxyGroupsModuleRulesPanel", () => {
     mocks.isMoved.mockReturnValue(false);
     const props = baseProps({
       cnIpNoResolve: false,
-      moduleRuleExclusions: { cn: ["cn-ip"] },
+      hiddenPresetRuleIds: { cn: ["cn-ip"] },
     });
     renderPanel(props);
 

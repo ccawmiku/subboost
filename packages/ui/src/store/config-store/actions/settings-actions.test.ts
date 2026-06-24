@@ -41,15 +41,4 @@ describe("config store settings actions", () => {
     expect(store.setAndGenerateConfig).toHaveBeenCalledTimes(8);
     expect(store.set).not.toHaveBeenCalled();
   });
-
-  it("updates all-rules order editing without regenerating config", () => {
-    const store = createStore({ allRulesOrderEditingEnabled: false });
-    const actions = createSettingsActions(store.set as any, store.get as any, store.setAndGenerateConfig as any);
-
-    actions.setAllRulesOrderEditingEnabled(1 as unknown as boolean);
-
-    expect(store.state()).toEqual({ allRulesOrderEditingEnabled: true });
-    expect(store.set).toHaveBeenCalledTimes(1);
-    expect(store.setAndGenerateConfig).not.toHaveBeenCalled();
-  });
 });

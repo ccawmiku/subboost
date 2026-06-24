@@ -34,6 +34,11 @@ function getStatusTextClass(item: CustomRuleBatchImportPreviewItem): string {
   return "text-red-200";
 }
 
+function ruleTargetToText(target: CustomRule["target"]): string {
+  if (typeof target === "string") return target;
+  return `${target.kind}:${target.id}`;
+}
+
 export function ProxyGroupsCustomRulesBatchDialog({
   open,
   onOpenChange,
@@ -219,9 +224,9 @@ export function ProxyGroupsCustomRulesBatchDialog({
                         <ArrowRight className="h-3 w-3 shrink-0 text-white/35" />
                         <span
                           className="max-w-[11rem] truncate rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-white/70"
-                          title={item.rule.target}
+                          title={ruleTargetToText(item.rule.target)}
                         >
-                          {item.rule.target}
+                          {ruleTargetToText(item.rule.target)}
                         </span>
                       </div>
                     ) : (

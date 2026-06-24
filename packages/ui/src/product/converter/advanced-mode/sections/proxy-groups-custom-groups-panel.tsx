@@ -1,14 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, ChevronRight, Pencil, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { Button } from "@subboost/ui/components/ui/button";
+import { Input } from "@subboost/ui/components/ui/input";
 import { toast } from "@subboost/ui/components/ui/toaster";
-import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
+import { PROXY_GROUP_MODULES, type ProxyGroupModule } from "@subboost/core/generator/proxy-groups";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
-import { extractRuleSetPathFromUrl } from "@subboost/core/rules/custom-routing-rule-sets";
-import { DEFAULT_LOAD_BALANCE_STRATEGY, type LoadBalanceStrategy } from "@subboost/core/types/config";
-import { useConfigStore, type CustomProxyGroup, type ModuleRuleOverride } from "@subboost/ui/store/config-store";
+import { resolveProxyGroupTargetName } from "@subboost/core/proxy-group-targets";
+import { DEFAULT_LOAD_BALANCE_STRATEGY, type LoadBalanceStrategy, type ProxyGroupGroupType } from "@subboost/core/types/config";
+import { useConfigStore } from "@subboost/ui/store/config-store";
 import { useProductInteractionAdapter } from "@subboost/ui/product/interactions";
 import {
   buildManualRuleTargets,
@@ -24,49 +25,52 @@ import {
 } from "./proxy-group-rule-row";
 import {
   ProxyGroupTypeMenu,
-  getLoadBalanceStrategyLabel,
-  getProxyGroupTypeLabel,
   type ProxyGroupTypeMenuValue,
 } from "./proxy-group-type-menu";
+import { ProxyGroupAdvancedPanel } from "./proxy-group-advanced-panel";
 import {
   buildProxyGroupName,
   parseProxyGroupNameDraft,
+  pickRandomEmoji,
   ProxyGroupNameEditor,
   toProxyGroupNameDraft,
   type ProxyGroupNameDraft,
 } from "./proxy-group-name-editor";
+import { ProxyGroupsModuleCard } from "./proxy-groups-module-card";
 
-export function ProxyGroupsCustomGroupsPanel() {
+export function ProxyGroupsCustomGroupsPanel({
+  advancedMode = false,
+  nodeCounts,
+}: {
+  advancedMode?: boolean;
+  nodeCounts?: Map<string, number>;
+}) {
   const {
     enabledProxyGroups,
     hiddenProxyGroups,
-    proxyGroupNameOverrides,
-    customRules,
-    customProxyGroups,
+    proxyGroupNameOverrides = {},
+    customRules = [],
+    customRuleSets = [],
+    customProxyGroups = [],
     addCustomProxyGroup,
     removeCustomProxyGroup,
     updateCustomProxyGroup,
     updateCustomRule,
     removeCustomRule,
-    toggleProxyGroup,
-    addModuleRules,
-    filteredProxyGroups,
-    dialerProxyGroups,
+    moveModuleRule,
+    removeModuleRule,
+    dialerProxyGroups = [],
   } = useConfigStore();
 
   const [expandedCustomGroups, setExpandedCustomGroups] = React.useState<Set<string>>(new Set());
-  const [newCustomGroupDraft, setNewCustomGroupDraft] = React.useState<ProxyGroupNameDraft>({
-    emoji: "🧩",
+  const [newCustomGroupDraft, setNewCustomGroupDraft] = React.useState<ProxyGroupNameDraft>(() => ({
+    emoji: pickRandomEmoji(),
     name: "",
-  });
-  const [newCustomGroupType, setNewCustomGroupType] = React.useState<CustomProxyGroup["groupType"]>("select");
-  const [newCustomGroupStrategy, setNewCustomGroupStrategy] =
-    React.useState<LoadBalanceStrategy>(DEFAULT_LOAD_BALANCE_STRATEGY);
+  }));
+  const [newCustomGroupDescription, setNewCustomGroupDescription] = React.useState("");
   const [editingCustomGroupId, setEditingCustomGroupId] = React.useState<string | null>(null);
-  const [editingCustomGroupDraft, setEditingCustomGroupDraft] = React.useState<ProxyGroupNameDraft>({
-    emoji: "🧩",
-    name: "",
-  });
+  const [editingCustomGroupName, setEditingCustomGroupName] = React.useState("");
+  const [editingCustomGroupDescription, setEditingCustomGroupDescription] = React.useState("");
   const interactions = useProductInteractionAdapter();
 
   const getAllGroupNamesForUniqCheck = React.useCallback(() => {
@@ -77,18 +81,23 @@ export function ProxyGroupsCustomGroupsPanel() {
     for (const g of customProxyGroups) {
       names.push(g.name);
     }
-    for (const g of filteredProxyGroups) {
-      if (!g || !g.enabled) continue;
-      const name = typeof g.name === "string" ? g.name.trim() : "";
-      if (!name) continue;
-      names.push(name);
-    }
     for (const g of dialerProxyGroups) {
       const name = g && typeof g.name === "string" ? g.name.trim() : "";
       if (name) names.push(name);
     }
     return names;
-  }, [customProxyGroups, dialerProxyGroups, filteredProxyGroups, proxyGroupNameOverrides]);
+  }, [customProxyGroups, dialerProxyGroups, proxyGroupNameOverrides]);
+
+  const moduleNames = React.useMemo(
+    () =>
+      Object.fromEntries(
+        PROXY_GROUP_MODULES.map((module) => [
+          module.id,
+          resolveProxyGroupModuleName(module, proxyGroupNameOverrides?.[module.id]),
+        ]),
+      ),
+    [proxyGroupNameOverrides],
+  );
 
   const manualRuleTargets = React.useMemo(
     () =>
@@ -96,10 +105,9 @@ export function ProxyGroupsCustomGroupsPanel() {
         enabledProxyGroups,
         hiddenProxyGroups,
         customProxyGroups,
-        filteredProxyGroups,
         proxyGroupNameOverrides,
       }),
-    [customProxyGroups, enabledProxyGroups, filteredProxyGroups, hiddenProxyGroups, proxyGroupNameOverrides],
+    [customProxyGroups, enabledProxyGroups, hiddenProxyGroups, proxyGroupNameOverrides],
   );
 
   const ruleSetMoveTargets = React.useMemo<RuleSetMoveTarget[]>(() => {
@@ -110,7 +118,7 @@ export function ProxyGroupsCustomGroupsPanel() {
         id: module.id,
         name: resolveProxyGroupModuleName(module, proxyGroupNameOverrides?.[module.id]),
       })),
-      ...customProxyGroups.map((group) => ({
+      ...customProxyGroups.filter((group) => group.enabled !== false).map((group) => ({
         kind: "custom" as const,
         id: group.id,
         name: group.name,
@@ -131,13 +139,33 @@ export function ProxyGroupsCustomGroupsPanel() {
 
       const state = useConfigStore.getState();
       const sourceGroup = state.customProxyGroups.find((group) => group.id === sourceGroupId);
-      const sourceRule = sourceGroup?.rules.find((rule) => rule.id === ruleId);
+      const sourceRule = sourceGroup
+        ? state.customRuleSets.find(
+            (rule) =>
+              rule.id === ruleId &&
+              resolveProxyGroupTargetName(rule.target, {
+                moduleNames,
+                customProxyGroups: state.customProxyGroups,
+              }) === sourceGroup.name,
+          )
+        : null;
       if (!sourceGroup || !sourceRule) return;
 
       if (target.kind === "custom") {
-        const targetGroup = state.customProxyGroups.find((group) => group.id === target.id);
+        const targetGroup = state.customProxyGroups.find((group) => group && group.id === target.id);
         if (!targetGroup) return;
-        if (targetGroup.rules.some((rule) => rule.id === sourceRule.id)) {
+        const targetName = targetGroup.name.trim();
+        if (!targetName) return;
+        if (
+          state.customRuleSets.some(
+            (rule) =>
+              rule.id === sourceRule.id &&
+              resolveProxyGroupTargetName(rule.target, {
+                moduleNames,
+                customProxyGroups: state.customProxyGroups,
+              }) === targetName,
+          )
+        ) {
           toast({
             title: "规则集已存在",
             description: "目标分流组里已经有同名规则集，请先移除重复项。",
@@ -145,54 +173,28 @@ export function ProxyGroupsCustomGroupsPanel() {
           });
           return;
         }
-
-        updateCustomProxyGroup(sourceGroup.id, {
-          rules: sourceGroup.rules.filter((rule) => rule.id !== sourceRule.id),
-        });
-        updateCustomProxyGroup(targetGroup.id, {
-          rules: [...targetGroup.rules, sourceRule],
-        });
-        return;
       }
 
-      const moduleRule: ModuleRuleOverride = {
-        id: sourceRule.id,
-        name: sourceRule.name,
-        behavior: sourceRule.behavior,
-        path: extractRuleSetPathFromUrl(sourceRule.url),
-        ...(sourceRule.noResolve ? { noResolve: true } : {}),
-      };
-      if (!enabledProxyGroups.includes(target.id)) {
-        toggleProxyGroup(target.id);
-      }
-      addModuleRules(target.id, [moduleRule]);
-      updateCustomProxyGroup(sourceGroup.id, {
-        rules: sourceGroup.rules.filter((rule) => rule.id !== sourceRule.id),
-      });
+      moveModuleRule(sourceGroup.id, ruleId, target);
     },
-    [addModuleRules, enabledProxyGroups, toggleProxyGroup, updateCustomProxyGroup],
+    [moduleNames, moveModuleRule],
   );
 
   return (
     <div className="space-y-2">
       {/* 新建自定义分组 */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <ProxyGroupNameEditor
-          value={newCustomGroupDraft}
-          onChange={setNewCustomGroupDraft}
-          namePlaceholder="自定义分组名称"
-        />
-        <div className="w-[120px]">
-          <ProxyGroupTypeMenu
-            value={newCustomGroupType as ProxyGroupTypeMenuValue}
-            strategy={newCustomGroupStrategy}
-            onChange={({ groupType, strategy }) => {
-              setNewCustomGroupType(groupType as CustomProxyGroup["groupType"]);
-              if (groupType === "load-balance") {
-                setNewCustomGroupStrategy(strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY);
-              }
-            }}
-            triggerClassName="h-7 text-[10px]"
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5">
+        <div className="grid min-w-0 grid-cols-[minmax(5.75rem,1fr)_minmax(0,1.47fr)] gap-1.5">
+          <ProxyGroupNameEditor
+            value={newCustomGroupDraft}
+            onChange={setNewCustomGroupDraft}
+            namePlaceholder="自定义分组名称"
+          />
+          <Input
+            value={newCustomGroupDescription}
+            onChange={(event) => setNewCustomGroupDescription(event.target.value)}
+            placeholder="描述文本（默认: 自定义代理组）"
+            className="h-7 min-w-0 border-white/10 bg-white/5 text-xs"
           />
         </div>
         <Button
@@ -217,12 +219,12 @@ export function ProxyGroupsCustomGroupsPanel() {
             addCustomProxyGroup({
               name: full,
               emoji,
-              groupType: newCustomGroupType,
-              ...(newCustomGroupType === "load-balance" ? { strategy: newCustomGroupStrategy } : {}),
-              rules: [],
+              description: newCustomGroupDescription.trim(),
+              groupType: "select",
             });
-            interactions.proxyGroupAdded?.({ groupType: newCustomGroupType });
-            setNewCustomGroupDraft({ emoji: "🧩", name: "" });
+            interactions.proxyGroupAdded?.({ groupType: "select" });
+            setNewCustomGroupDraft({ emoji: pickRandomEmoji(emoji), name: "" });
+            setNewCustomGroupDescription("");
           }}
           title="新增"
         >
@@ -238,14 +240,20 @@ export function ProxyGroupsCustomGroupsPanel() {
           {customProxyGroups.map((group) => {
             const isExpanded = expandedCustomGroups.has(group.id);
             const isEditing = editingCustomGroupId === group.id;
-            const manualRules = listCustomRulesForTarget(customRules, group.name);
-            const totalRules = group.rules.length + manualRules.length;
-            const typeLabel =
-              group.groupType === "load-balance"
-                ? `${getProxyGroupTypeLabel(group.groupType)} / ${getLoadBalanceStrategyLabel(
-                    group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
-                  )}`
-                : getProxyGroupTypeLabel(group.groupType);
+            const manualRules = listCustomRulesForTarget(customRules, group.name, {
+              moduleNames,
+              customProxyGroups,
+            });
+            const groupRuleSets = customRuleSets.filter(
+              (ruleSet) =>
+                resolveProxyGroupTargetName(ruleSet.target, {
+                  moduleNames,
+                  customProxyGroups,
+                }) === group.name,
+            );
+            const totalRules = groupRuleSets.length + manualRules.length;
+            const description = group.description?.trim() || "自定义代理组";
+            const nodeCount = nodeCounts?.get(group.name) ?? 0;
 
             const toggleExpand = () => {
               setExpandedCustomGroups((prev) => {
@@ -257,7 +265,7 @@ export function ProxyGroupsCustomGroupsPanel() {
             };
 
             const commitCustomRename = () => {
-              const draft = toProxyGroupNameDraft(editingCustomGroupDraft);
+              const draft = parseProxyGroupNameDraft(editingCustomGroupName, group.emoji || "🧩");
               const nextFull = buildProxyGroupName(draft);
               if (!nextFull) return;
               const emoji = draft.emoji.trim();
@@ -271,200 +279,166 @@ export function ProxyGroupsCustomGroupsPanel() {
                 return;
               }
 
-              updateCustomProxyGroup(group.id, { name: nextFull, emoji });
+              updateCustomProxyGroup(group.id, {
+                name: nextFull,
+                emoji,
+                description: editingCustomGroupDescription,
+              });
               setEditingCustomGroupId(null);
-              setEditingCustomGroupDraft({ emoji: "🧩", name: "" });
+              setEditingCustomGroupName("");
+              setEditingCustomGroupDescription("");
+            };
+
+            const rulesContent =
+              totalRules === 0 ? null : (
+                <>
+                  {groupRuleSets.map((r) => (
+                    <ProxyGroupRuleSetRow
+                      key={`ruleset:${r.id}`}
+                      name={r.name}
+                      path={r.path}
+                      source="custom"
+                      behavior={r.behavior}
+                      noResolve={r.noResolve}
+                      actions={
+                        <>
+                          <ProxyGroupRuleMoveMenu
+                            title="移动规则集"
+                            ariaLabel={`移动 ${r.name} 规则集`}
+                            targets={ruleSetMoveTargets}
+                            kinds={["module", "custom"]}
+                            currentTarget={{ kind: "custom", id: group.id, name: group.name }}
+                            onMove={(target) => {
+                              if (isRuleSetMoveTarget(target)) {
+                                moveCustomGroupRuleSet(group.id, r.id, target);
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-white/35 hover:text-red-300"
+                            onClick={() => removeModuleRule(group.id, r.id)}
+                            title="删除规则集"
+                            aria-label={`删除 ${r.name} 规则集`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      }
+                    />
+                  ))}
+                  {manualRules.map((item) => (
+                    <ProxyGroupManualRuleRow
+                      key={`manual:${item.rule.id}`}
+                      item={item}
+                      targets={manualRuleTargets}
+                      currentTargetName={group.name}
+                      onMove={moveManualRule}
+                      onRemove={({ index }) => removeCustomRule(index)}
+                    />
+                  ))}
+                </>
+              );
+            const cardModule: ProxyGroupModule = {
+              id: group.id,
+              name: group.name,
+              emoji: group.emoji || "🧩",
+              category: "other",
+              description,
+              groupType: group.groupType,
+              rules: [],
             };
 
             return (
-              <div key={group.id} className="overflow-hidden rounded border border-white/10 bg-white/5">
-                <div
-                  className="flex cursor-pointer flex-wrap items-center gap-2 px-2 py-2 transition-colors hover:bg-white/5"
-                  onClick={() => {
-                    if (!isEditing) toggleExpand();
-                  }}
-                  title={isExpanded ? "收起" : "展开"}
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="h-4 w-4 shrink-0 text-white/50" />
+              <ProxyGroupsModuleCard
+                key={group.id}
+                module={cardModule}
+                display={{ full: group.name }}
+                isCore={false}
+                isEnabled={group.enabled !== false}
+                onToggleEnabled={() => updateCustomProxyGroup(group.id, { enabled: group.enabled === false })}
+                isEditing={isEditing}
+                editingName={editingCustomGroupName}
+                editingDescription={editingCustomGroupDescription}
+                onChangeEditingName={setEditingCustomGroupName}
+                onChangeEditingDescription={setEditingCustomGroupDescription}
+                onStartEditing={() => {
+                  setEditingCustomGroupId(group.id);
+                  setEditingCustomGroupName(group.name);
+                  setEditingCustomGroupDescription(group.description ?? "");
+                }}
+                onCancelEditing={() => {
+                  setEditingCustomGroupId(null);
+                  setEditingCustomGroupName("");
+                  setEditingCustomGroupDescription("");
+                }}
+                onCommitEditing={commitCustomRename}
+                onHide={() => removeCustomProxyGroup(group.id)}
+                extraRules={[]}
+                ruleSetsByTarget={{}}
+                hiddenPresetRuleIds={{}}
+                customProxyGroups={customProxyGroups}
+                manualRules={manualRules}
+                manualRuleTargets={manualRuleTargets}
+                enabledProxyGroups={enabledProxyGroups}
+                hiddenProxyGroups={hiddenProxyGroups}
+                proxyGroupNameOverrides={proxyGroupNameOverrides}
+                moduleRuleEditWarningAccepted
+                acceptModuleRuleEditWarning={() => undefined}
+                isRulesExpanded={isExpanded}
+                onToggleRulesExpanded={toggleExpand}
+                onAddRules={() => undefined}
+                onAddRulesToModule={() => undefined}
+                onAddRuleToCustomGroup={() => undefined}
+                onRemoveExtraRule={() => undefined}
+                onMoveRule={() => undefined}
+                onMoveManualRule={(ruleId, targetName) => updateCustomRule(ruleId, { target: targetName })}
+                onRemoveManualRule={removeCustomRule}
+                onRestoreRule={() => undefined}
+                onResetRuleTarget={() => undefined}
+                cnIpNoResolve={false}
+                onChangeCnIpNoResolve={() => undefined}
+                experimentalCnUseCnRuleSet={false}
+                onChangeExperimentalCnUseCnRuleSet={() => undefined}
+                description={description}
+                groupType={group.groupType as ProxyGroupTypeMenuValue}
+                strategy={group.strategy}
+                onChangeGroupType={({ groupType, strategy }) =>
+                  updateCustomProxyGroup(group.id, {
+                    groupType: groupType as ProxyGroupGroupType,
+                    ...(groupType === "load-balance"
+                      ? { strategy: strategy ?? group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY }
+                      : { strategy: undefined }),
+                  })
+                }
+                rulesContentOverride={
+                  totalRules === 0 ? (
+                    <p className="px-2 py-3 text-center text-[11px] text-white/40">
+                      还没有规则集。可在“搜索规则库”中选择规则后添加到该分组。
+                    </p>
                   ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-white/50" />
-                  )}
-                  <div className="min-w-0 flex-[1_1_180px]">
-                    {isEditing ? (
-                      <div className="flex items-center gap-1">
-                        <ProxyGroupNameEditor
-                          value={editingCustomGroupDraft}
-                          onChange={setEditingCustomGroupDraft}
-                          namePlaceholder="自定义分组名称"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitCustomRename();
-                            if (e.key === "Escape") {
-                              setEditingCustomGroupId(null);
-                              setEditingCustomGroupDraft({ emoji: "🧩", name: "" });
-                            }
-                          }}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            commitCustomRename();
-                          }}
-                          className="h-7 px-2"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingCustomGroupId(null);
-                            setEditingCustomGroupDraft({ emoji: "🧩", name: "" });
-                          }}
-                          className="h-7 px-2"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate" title={group.name}>
-                            {group.name}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingCustomGroupId(group.id);
-                              setEditingCustomGroupDraft(parseProxyGroupNameDraft(group.name, group.emoji || ""));
-                            }}
-                            title="改名"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        <div className="text-[10px] text-white/40 truncate">
-                          {`${totalRules} 规则 · ${typeLabel}`}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {!isEditing && (
-                    <div className="ml-auto flex shrink-0 items-center gap-1">
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <ProxyGroupTypeMenu
-                          value={group.groupType as ProxyGroupTypeMenuValue}
-                          strategy={group.strategy}
-                          onChange={({ groupType, strategy }) =>
-                            updateCustomProxyGroup(group.id, {
-                              groupType: groupType as CustomProxyGroup["groupType"],
-                              ...(groupType === "load-balance"
-                                ? { strategy: strategy ?? group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY }
-                                : { strategy: undefined }),
-                            })
-                          }
-                          contentAlign="end"
-                          trigger={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 shrink-0 px-2 text-white/35 hover:text-indigo-200"
-                              title={`类型：${typeLabel}`}
-                              aria-label={`修改 ${group.name} 类型`}
-                            >
-                              <SlidersHorizontal className="h-3.5 w-3.5" />
-                            </Button>
-                          }
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 shrink-0 px-2 text-white/30 hover:text-red-400"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeCustomProxyGroup(group.id);
-                        }}
-                        title="删除"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {isExpanded && (
-                  <div className="space-y-1 border-t border-white/10 py-1">
-                    {totalRules === 0 ? (
-                      <p className="px-2 py-3 text-center text-[11px] text-white/40">
-                        还没有规则集。可在“搜索规则库”中选择规则后添加到该分组。
-                      </p>
-                    ) : (
-                      <>
-                        {group.rules.map((r) => (
-                          <ProxyGroupRuleSetRow
-                            key={`ruleset:${r.id}`}
-                            name={r.name}
-                            path={extractRuleSetPathFromUrl(r.url)}
-                            source="custom"
-                            behavior={r.behavior}
-                            noResolve={r.noResolve}
-                            actions={
-                              <>
-                                <ProxyGroupRuleMoveMenu
-                                  title="移动规则集"
-                                  ariaLabel={`移动 ${r.name} 规则集`}
-                                  targets={ruleSetMoveTargets}
-                                  kinds={["module", "custom"]}
-                                  currentTarget={{ kind: "custom", id: group.id, name: group.name }}
-                                  onMove={(target) => {
-                                    if (isRuleSetMoveTarget(target)) {
-                                      moveCustomGroupRuleSet(group.id, r.id, target);
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-white/35 hover:text-red-300"
-                                  onClick={() => {
-                                    const next = group.rules.filter((x) => x.id !== r.id);
-                                    updateCustomProxyGroup(group.id, { rules: next });
-                                  }}
-                                  title="删除规则集"
-                                  aria-label={`删除 ${r.name} 规则集`}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </>
-                            }
-                          />
-                        ))}
-                        {manualRules.map((item) => (
-                          <ProxyGroupManualRuleRow
-                            key={`manual:${item.rule.id}`}
-                            item={item}
-                            targets={manualRuleTargets}
-                            currentTargetName={group.name}
-                            onMove={moveManualRule}
-                            onRemove={({ index }) => removeCustomRule(index)}
-                          />
-                        ))}
-                      </>
-                    )}
-                  </div>
+                    <div className="space-y-1 p-2">{rulesContent}</div>
+                  )
+                }
+                rulesCountOverride={totalRules}
+                advancedMode={advancedMode}
+                nodeCount={nodeCount}
+                renderAdvancedContent={(content, count) => (
+                  <ProxyGroupAdvancedPanel
+                    target={{ kind: "custom", id: group.id, name: group.name }}
+                    advanced={group.advanced || {}}
+                    onChange={(patch) =>
+                      updateCustomProxyGroup(group.id, {
+                        advanced: { ...(group.advanced || {}), ...patch },
+                      })
+                    }
+                    rulesCount={count}
+                    rulesContent={count > 0 ? content : null}
+                  />
                 )}
-              </div>
+              />
             );
           })}
         </div>

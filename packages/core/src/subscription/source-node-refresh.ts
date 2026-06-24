@@ -20,11 +20,18 @@ export type SourceRefreshDescriptor = {
   lastNameTemplate?: string;
   treatAsNewSource?: boolean;
   smartNodeMatchingEnabled?: boolean;
+  deletedNodes?: DeletedNodeDescriptor[];
 };
 
 export type MergeSourceNodesResult = {
   nodes: ParsedNode[];
   renameMap: Map<string, string>;
+};
+
+export type DeletedNodeDescriptor = {
+  originName?: unknown;
+  name?: unknown;
+  node?: ParsedNode;
 };
 
 function normalizeOptionalString(value: unknown): string | undefined {
@@ -106,10 +113,33 @@ export function mergeParsedSourceNodes(
       .map((name) => name.trim())
       .filter(Boolean)
   );
+  const deletedNodeKeys = new Set<string>();
+  for (const item of Array.isArray(descriptor.deletedNodes) ? descriptor.deletedNodes : []) {
+    if (!item?.node) continue;
+    const node = normalizeNodeOriginName(item.node);
+    const origin = normalizeOptionalString(item.originName) ?? (getNodeOriginName(node).trim() || node.name);
+    if (!origin) continue;
+    deletedNodeKeys.add(buildScopedNodeIdentityKey(origin, node));
+  }
 
-  const isDeleted = (originNameRaw: string, displayNameRaw?: string): boolean => {
+  const freshOriginCounts = new Map<string, number>();
+  for (const rawNode of parsedNodes) {
+    const node = normalizeNodeOriginName(rawNode);
+    const origin = originOf(node);
+    if (!origin) continue;
+    freshOriginCounts.set(origin, (freshOriginCounts.get(origin) ?? 0) + 1);
+  }
+
+  const isDeleted = (node: ParsedNode, originNameRaw: string, displayNameRaw?: string): boolean => {
     const originName = (originNameRaw || "").trim();
     if (!originName) return false;
+    if (deletedNodeKeys.has(buildScopedNodeIdentityKey(originName, node))) return true;
+
+    // Legacy deletedNodeNames are only origin/display-name markers. When a source
+    // emits many distinct nodes with the same default origin name, a single
+    // coarse marker must not hide the entire batch.
+    if ((freshOriginCounts.get(originName) ?? 0) > 1) return false;
+
     if (deleted.has(originName)) return true;
 
     const displayName = typeof displayNameRaw === "string" ? displayNameRaw.trim() : "";
@@ -136,7 +166,7 @@ export function mergeParsedSourceNodes(
     const node = normalizeNodeOriginName(rawNode);
     const origin = originOf(node);
     if (!origin) continue;
-    if (isDeleted(origin, node.name)) continue;
+    if (isDeleted(node, origin, node.name)) continue;
 
     const key = keyOf(node);
     if (freshSeenKeys.has(key)) continue;

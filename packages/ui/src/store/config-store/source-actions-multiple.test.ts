@@ -207,6 +207,29 @@ describe("createSourceActions parseMultipleSources", () => {
     });
   });
 
+  it("ignores non-numeric URL userinfo and keeps raw URL content when normalization fails", async () => {
+    mocks.fetchUrlContentInBrowser.mockResolvedValueOnce({
+      content: "ss://remote",
+      headers: {
+        "subscription-userinfo": "upload=bad; expire=never",
+      },
+    });
+    mocks.parseSubscription.mockReturnValueOnce(parseResult([node("Remote")]));
+    const sources = [source({ id: "url-ok", type: "url", content: "not a url" })];
+    const { actions, getState } = createHarness({ sources });
+
+    await actions.parseMultipleSources(sources);
+
+    expect(getState().nodes).toEqual([
+      expect.objectContaining({ name: "Remote", _originName: "Remote", _sourceIds: ["url-ok"] }),
+    ]);
+    expect(getState().sources[0]).toMatchObject({
+      parsed: true,
+      subscriptionUserInfo: undefined,
+      lastParsedContent: "not a url",
+    });
+  });
+
   it("merges duplicate parsed nodes and prunes stale listener ports and dialer nodes", async () => {
     const duplicate = node("Duplicate", {
       server: "same.example.com",
@@ -284,5 +307,55 @@ describe("createSourceActions parseMultipleSources", () => {
       _sourceIds: ["s1"],
     });
     expect(getState().listenerPorts).toEqual({ Duplicate: 41000 });
+  });
+
+  it("keeps repeated origins when multiple distinct deleted-origin nodes are reimported", async () => {
+    mocks.parseSubscription.mockReturnValueOnce(
+      parseResult([
+        node("Shared Origin", {
+          _originName: "Shared Origin",
+          server: "one.example.com",
+        }),
+        node("Shared Origin", {
+          _originName: "Shared Origin",
+          server: "two.example.com",
+        }),
+      ])
+    );
+    const sources = [source({ id: "s1", type: "yaml", content: "one" })];
+    const { actions, getState } = createHarness({
+      sources,
+      deletedNodeNames: ["Shared Origin"],
+    });
+
+    await actions.parseMultipleSources(sources);
+
+    expect(getState().nodes).toEqual([
+      expect.objectContaining({ name: "Shared Origin", _originName: "Shared Origin", server: "one.example.com" }),
+      expect.objectContaining({ name: "Shared Origin (2)", _originName: "Shared Origin", server: "two.example.com" }),
+    ]);
+  });
+
+  it("filters deleted node identity records while keeping blank-origin fallbacks", async () => {
+    const deleted = node("Gone");
+    const blankOrigin = node("Blank Origin", { _originName: " " });
+    mocks.parseSubscription.mockReturnValueOnce(parseResult([deleted, blankOrigin, node("Fresh")]));
+    const sources = [source({ id: "s1", type: "yaml", content: "one" })];
+    const { actions, getState } = createHarness({
+      sources,
+      deletedNodes: [
+        { originName: " Gone ", node: deleted },
+        { node: null },
+        { originName: " ", node: blankOrigin },
+      ],
+    });
+
+    await actions.parseMultipleSources(sources);
+
+    expect(getState().nodes.map((item: ParsedNode) => item.name)).toEqual(["Blank Origin", "Fresh"]);
+    expect(getState().sources[0]).toMatchObject({
+      parsed: true,
+      nodeCount: 3,
+    });
   });
 });

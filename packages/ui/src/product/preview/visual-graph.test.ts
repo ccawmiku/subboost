@@ -71,14 +71,29 @@ vi.mock("@subboost/ui/store/config-store", () => ({
   useConfigStore: (selector?: any) => (typeof selector === "function" ? selector(mocks.store) : mocks.store),
 }));
 vi.mock("@subboost/core/generator/proxy-groups", () => ({
-  PROXY_GROUP_MODULES: [
-    { id: "select", name: "🚀 节点选择", emoji: "🚀", groupType: "select", category: "core" },
-    { id: "auto", name: "⚡ 自动选择", emoji: "⚡", groupType: "url-test", category: "service" },
-    { id: "ad", name: "🛑 广告拦截", emoji: "🛑", groupType: "select", category: "other" },
-  ],
+	  PROXY_GROUP_MODULES: [
+	    {
+	      id: "select",
+	      name: "🚀 节点选择",
+	      emoji: "🚀",
+	      groupType: "select",
+	      category: "core",
+	      rules: [{ id: "sel", name: "Select Rule", behavior: "classical" }],
+	    },
+	    {
+	      id: "auto",
+	      name: "⚡ 自动选择",
+	      emoji: "⚡",
+	      groupType: "url-test",
+	      category: "service",
+	      rules: [{ id: "r1", name: "Rule One", behavior: "domain" }],
+	    },
+	    { id: "ad", name: "🛑 广告拦截", emoji: "🛑", groupType: "select", category: "other" },
+	  ],
   generateProxyGroups: vi.fn(() => mocks.generatedProxyGroups),
 }));
 vi.mock("@subboost/core/generator/module-rules", () => ({
+  getModuleRuleOrderKey: (moduleId: string, ruleId: string) => `module:${moduleId}:${ruleId}`,
   getEffectiveModuleRules: vi.fn(() => mocks.effectiveRules),
 }));
 vi.mock("@subboost/core/proxy-group-name", () => ({
@@ -147,10 +162,9 @@ describe("VisualGraph", () => {
       enabledProxyGroups: ["select", "auto"],
       dialerProxyGroups: [{ id: "d1", name: "Relay", enabled: true, relayNodes: ["Relay"], targetNodes: ["Beta"], type: "select" }],
       customRules: [{ id: "manual" }],
-      customProxyGroups: [{ id: "custom-1", name: "🧩 Custom", emoji: "🧩", groupType: "load-balance", strategy: "round-robin", rules: [{ id: "cr", name: "Custom Rule", behavior: "ipcidr" }] }],
-      filteredProxyGroups: [{ id: "filtered-1", name: "🧩 Filtered", emoji: "", enabled: true }],
-      moduleRuleOverrides: {},
-      moduleRuleExclusions: {},
+      customProxyGroups: [{ id: "custom-1", name: "🧩 Custom", emoji: "🧩", groupType: "load-balance", strategy: "round-robin" }],
+      customRuleSets: [],
+      builtinRuleEdits: {},
       proxyGroupNameOverrides: {},
       proxyGroupOrder: ["dialer:d1", "module:auto", "missing", "module:select", "dialer:d1"],
       testUrl: "https://example.com",
@@ -185,7 +199,7 @@ describe("VisualGraph", () => {
       "module:auto",
       "module:select",
       "custom:custom-1",
-      "filtered:filtered-1",
+      "name:🧩 Filtered",
       "name:External",
     ]);
     expect(preview.displayGroups.find((group: any) => group.id === "module:auto").rules).toEqual([
@@ -205,6 +219,52 @@ describe("VisualGraph", () => {
     expect(mocks.store.setProxyGroupOrder).toHaveBeenCalledWith(["module:auto"]);
   });
 
+  it("uses selector defaults when optional store slices are absent", () => {
+    mocks.generatedProxyGroups = [{ name: "🚀 节点选择", type: "select", proxies: ["DIRECT"] }];
+    mocks.customRuleSets = [];
+    mocks.store = {
+      nodes: [{ name: "Only", type: "ss" }],
+      enabledProxyGroups: ["select"],
+      testUrl: "https://example.com",
+      testInterval: 300,
+      ruleProviderBaseUrl: "https://rules.example",
+      setProxyGroupOrder: vi.fn(),
+    };
+
+    const { html } = renderGraph();
+
+    expect(html).toContain("1");
+    expect(mocks.captures.proxyGroupsPreview.displayGroups).toEqual([
+      expect.objectContaining({ id: "module:select", name: "🚀 节点选择" }),
+    ]);
+    expect(mocks.captures.customRulesPreview).toEqual({
+      customRules: [],
+      ruleSets: [],
+    });
+  });
+
+  it("shows builtin rules moved from another module into the target module", () => {
+    mocks.generatedProxyGroups = [{ name: "🚀 节点选择", type: "select", proxies: ["DIRECT"] }];
+    mocks.store = {
+      ...mocks.store,
+      builtinRuleEdits: {
+        "module:auto:r1": { target: "🚀 节点选择" },
+        "module:auto:missing": { target: "🚀 节点选择" },
+        "module:missing:r1": { target: "🚀 节点选择" },
+        "module:select:sel": { target: "🚀 节点选择" },
+        "not-module": { target: "🚀 节点选择" },
+      },
+      proxyGroupOrder: [],
+    };
+
+    renderGraph();
+
+    expect(mocks.captures.proxyGroupsPreview.displayGroups[0].rules).toEqual([
+      { id: "sel", name: "Select Rule", behavior: "classical" },
+      { id: "r1", name: "Rule One", behavior: "domain" },
+    ]);
+  });
+
   it("falls back to generated order and truncates long node lists", () => {
     mocks.store.proxyGroupOrder = [];
     mocks.store.dialerProxyGroups = [{ id: "d2", name: "Disabled", enabled: false }];
@@ -215,7 +275,7 @@ describe("VisualGraph", () => {
       "module:select",
       "module:auto",
       "custom:custom-1",
-      "filtered:filtered-1",
+      "name:🧩 Filtered",
       "name:External",
     ]);
     expect(html).toContain("还有 2 个节点");
@@ -292,20 +352,16 @@ describe("VisualGraph", () => {
       null,
       { id: "bad-type", name: 123 },
       { id: "bad-name", name: "   " },
+      { id: "emoji", name: "Emoji Filter", emoji: "⭐", groupType: "select" },
       { id: "plain", name: "Plain Custom", emoji: "", groupType: "", strategy: "", rules: [] },
     ];
-    mocks.store.filteredProxyGroups = [
-      null,
-      { id: "disabled", name: "Disabled", enabled: false },
-      { id: "emoji", name: "Emoji Filter", emoji: "⭐", enabled: true },
-    ];
-    mocks.store.proxyGroupOrder = ["name:", "filtered:emoji", "custom:plain", "dialer:d3"];
+    mocks.store.proxyGroupOrder = ["name:", "custom:emoji", "custom:plain", "dialer:d3"];
 
     const { html } = renderGraph({ 3: 800 });
     const groups = mocks.captures.proxyGroupsPreview.displayGroups;
 
-    expect(groups.map((group: any) => group.id)).toEqual(["name:", "filtered:emoji", "custom:plain", "dialer:d3"]);
-    expect(groups.find((group: any) => group.id === "filtered:emoji")).toMatchObject({ emoji: "⭐" });
+    expect(groups.map((group: any) => group.id)).toEqual(["name:", "custom:emoji", "custom:plain", "dialer:d3"]);
+    expect(groups.find((group: any) => group.id === "custom:emoji")).toMatchObject({ emoji: "⭐" });
     expect(groups.find((group: any) => group.id === "dialer:d3").dialer).toMatchObject({
       relayNodes: [],
       targetNodes: [],
@@ -313,5 +369,20 @@ describe("VisualGraph", () => {
     expect(mocks.captures.protocolBadges.map((props: any) => props.type)).toEqual(["anytls", "unknown"]);
     expect(html).toContain("bg-teal-400");
     expect(html).toContain("bg-gray-400");
+  });
+
+  it("merges built-in rule edits moved from another module and skips invalid edit records", () => {
+    mocks.store.builtinRuleEdits = {
+      "module:auto:r1": { enabled: false },
+      "module:select:sel": { target: "⚡ 自动选择" },
+      "module:select:missing": { target: "⚡ 自动选择" },
+      "module:missing:ghost": { target: "⚡ 自动选择" },
+      "not-a-module-key": { target: "⚡ 自动选择" },
+    };
+
+    renderGraph({ 3: 800 });
+    const auto = mocks.captures.proxyGroupsPreview.displayGroups.find((group: any) => group.id === "module:auto");
+
+    expect(auto.rules).toEqual([{ id: "sel", name: "Select Rule", behavior: "classical" }]);
   });
 });

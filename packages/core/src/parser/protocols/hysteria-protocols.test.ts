@@ -66,6 +66,12 @@ describe("Hysteria protocol parsers", () => {
       "hysteria2://secret@hy2.example.com:1000-1002?obfs=salamander&obfs_password=mask&upmbps=20&downmbps=30&hop-interval=10#Ports"
     );
     const queryPorts = parseHysteria2("hysteria2://hy2.example.com?auth=secret&mport=2000,2001");
+    const ipv6Default = parseHysteria2(
+      "hysteria2://secret@[2001:db8::2]///?obfs=none&alpn=,,&up=10kbps&down=20&hop-interval=0&hop_interval=5"
+    );
+    const queryAuthAlias = parseHysteria2(
+      "hysteria2://alias.example.com?auth_str=query-secret&ports=3000-3002&hop-interval=30-15&hopInterval=20-30"
+    );
 
     expect(ranged).toMatchObject({
       name: "Ports",
@@ -85,6 +91,24 @@ describe("Hysteria protocol parsers", () => {
       port: 2000,
       password: "secret",
       ports: "2000,2001",
+    });
+    expect(ipv6Default).toMatchObject({
+      server: "2001:db8::2",
+      port: 443,
+      password: "secret",
+      sni: "2001:db8::2",
+      up: "10kbps",
+      down: "20 mbps",
+      "hop-interval": 5,
+    });
+    expect(ipv6Default).not.toHaveProperty("obfs");
+    expect(ipv6Default).not.toHaveProperty("alpn");
+    expect(queryAuthAlias).toMatchObject({
+      server: "alias.example.com",
+      password: "query-secret",
+      port: 3000,
+      ports: "3000-3002",
+      "hop-interval": "20-30",
     });
   });
 

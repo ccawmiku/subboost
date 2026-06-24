@@ -74,9 +74,9 @@ function buildGenerateClashYamlOptions(
     },
     dialerProxyGroups: state.dialerProxyGroups,
     customProxyGroups: state.customProxyGroups,
-    filteredProxyGroups: state.filteredProxyGroups,
-    moduleRuleOverrides: state.moduleRuleOverrides,
-    moduleRuleExclusions: state.moduleRuleExclusions,
+    customRuleSets: state.customRuleSets,
+    builtinRuleEdits: state.builtinRuleEdits,
+    proxyGroupAdvanced: state.proxyGroupAdvanced,
     proxyGroupNameOverrides: state.proxyGroupNameOverrides,
     proxyGroupOrder: state.proxyGroupOrder,
   };

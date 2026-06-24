@@ -9,7 +9,7 @@ import {
 } from "./rules";
 import { generateClashConfig } from "./index";
 import { PROXY_GROUP_MODULES } from "./proxy-groups";
-import type { CustomProxyGroup, CustomRule } from "@subboost/core/types/config";
+import type { CustomRule, CustomRuleSet } from "@subboost/core/types/config";
 
 const customRules: CustomRule[] = [
   {
@@ -27,13 +27,14 @@ const customRules: CustomRule[] = [
   },
 ];
 
-const customGroups: CustomProxyGroup[] = [
+const customRuleSets: CustomRuleSet[] = [
   {
-    id: "media",
-    name: "Media",
-    emoji: "M",
-    groupType: "select",
-    rules: [{ id: "media-rule", name: "Media Rule", behavior: "domain", url: "https://rules.example.com/media.mrs", noResolve: true }],
+    id: "media-rule",
+    name: "Media Rule",
+    behavior: "domain",
+    path: "https://rules.example.com/media.mrs",
+    target: "Media",
+    noResolve: true,
   },
 ];
 
@@ -42,7 +43,7 @@ describe("rule generator", () => {
     const entries = buildGeneratedRuleEntries({
       enabledModules: ["cn", "global", "final", "streaming-west"],
       customRules,
-      customProxyGroups: customGroups,
+      customRuleSets,
       experimentalCnUseCnRuleSet: true,
       cnIpNoResolve: false,
       proxyGroupNameOverrides: {
@@ -55,6 +56,8 @@ describe("rule generator", () => {
     });
     const texts = entries.map((entry) => entry.text);
     const customIpEntry = entries.find((entry) => entry.key === "custom-rule:ip-rule");
+    const customRuleSetEntry = entries.find((entry) => entry.key === "custom-rule-set:media-rule");
+    const appleTvPlusEntry = entries.find((entry) => entry.key === "module:streaming-west:apple-tvplus");
 
     expect(resolveModuleName("cn", { cn: "CN Direct" })).toBe("🔒 CN Direct");
     expect(texts).toContain("DOMAIN-SUFFIX,example.com,DIRECT");
@@ -65,9 +68,12 @@ describe("rule generator", () => {
     });
     expect(texts).toContain("RULE-SET,media-rule,Media,no-resolve");
     expect(texts).toContain("RULE-SET,apple-tvplus,📺 Streaming");
-    expect(entries.find((entry) => entry.text === "RULE-SET,apple-tvplus,📺 Streaming")).toMatchObject({
+    expect(customIpEntry).toMatchObject({ editable: true });
+    expect(customRuleSetEntry).toMatchObject({ editable: true });
+    expect(appleTvPlusEntry).toMatchObject({
       key: "module:streaming-west:apple-tvplus",
       kind: "module",
+      editable: false,
     });
     expect(entries.some((entry) => entry.key === "special:apple-tvplus")).toBe(false);
     expect(texts).toContain("RULE-SET,cn,🔒 CN Direct");
@@ -94,7 +100,7 @@ describe("rule generator", () => {
             ruleProviderBaseUrl: "https://example.com/rules",
             experimentalCnUseCnRuleSet: false,
           },
-          moduleRuleExclusions: { [proxyModule.id]: [rule.id] },
+          builtinRuleEdits: { [`module:${proxyModule.id}:${rule.id}`]: { enabled: false } },
         });
         const rules = Array.isArray(config.rules) ? config.rules : [];
         const providers = config["rule-providers"] as Record<string, unknown> | undefined;
@@ -121,21 +127,11 @@ describe("rule generator", () => {
     const baseline = generateClashConfig(baseConfig);
     const deleted = generateClashConfig({
       ...baseConfig,
-      moduleRuleExclusions: { "streaming-west": ["apple-tvplus"] },
+      builtinRuleEdits: { "module:streaming-west:apple-tvplus": { enabled: false } },
     });
     const moved = generateClashConfig({
       ...baseConfig,
-      moduleRuleExclusions: { "streaming-west": ["apple-tvplus"] },
-      moduleRuleOverrides: {
-        google: [
-          {
-            id: "apple-tvplus",
-            name: "Apple TV+",
-            behavior: "domain",
-            path: "geosite/apple-tvplus.mrs",
-          },
-        ],
-      },
+      builtinRuleEdits: { "module:streaming-west:apple-tvplus": { target: "🔍 谷歌服务" } },
     });
     const baselineRules = baseline.rules as string[];
     const appleTvPlusIndex = baselineRules.indexOf("RULE-SET,apple-tvplus,📺 欧美流媒体");
@@ -159,28 +155,34 @@ describe("rule generator", () => {
     const editableOrder = normalizePersistedRuleOrder({
       enabledModules: ["cn", "global", "final"],
       customRules,
-      customProxyGroups: customGroups,
-      ruleOrder: ["custom-group:media:media-rule", "missing", "custom-rule:domain-rule"],
+      customRuleSets,
+      ruleOrder: ["custom-rule-set:media-rule", "missing", "custom-rule:domain-rule"],
     });
     const fullOrder = normalizePersistedRuleOrder({
       enabledModules: ["cn", "global", "final"],
       customRules,
-      customProxyGroups: customGroups,
+      customRuleSets,
       ruleOrder: ["module:global:geolocation-!cn", "custom-rule:domain-rule", "special:match"],
     });
     const applied = resolveAppliedRuleOrder({
       enabledModules: ["cn", "global", "final"],
       customRules,
-      customProxyGroups: customGroups,
+      customRuleSets,
       ruleOrder: ["module:global:geolocation-!cn"],
     });
 
     expect(hasFullRuleOrderKeys(["custom-rule:domain-rule"])).toBe(false);
     expect(hasFullRuleOrderKeys(["module:global:geolocation-!cn"])).toBe(true);
-    expect(editableOrder).toEqual(["custom-group:media:media-rule", "custom-rule:domain-rule", "custom-rule:ip-rule"]);
+    expect(editableOrder).toEqual(["custom-rule-set:media-rule", "custom-rule:domain-rule", "custom-rule:ip-rule"]);
     expect(fullOrder).toEqual(["module:global:geolocation-!cn", "custom-rule:domain-rule"]);
     expect(applied).toContain("module:global:geolocation-!cn");
     expect(applied.indexOf("custom-rule:domain-rule")).toBeLessThan(applied.indexOf("module:global:geolocation-!cn"));
+    expect(resolveAppliedRuleOrder({
+      enabledModules: ["cn", "global", "final"],
+      customRules,
+      customRuleSets,
+      ruleOrder: ["custom-rule-set:media-rule", "custom-rule:ip-rule"],
+    }).slice(0, 3)).toEqual(["custom-rule-set:media-rule", "custom-rule:ip-rule", "custom-rule:domain-rule"]);
     expect(generateRules({
       enabledModules: [],
       customRules: [],
@@ -192,7 +194,7 @@ describe("rule generator", () => {
     const options = {
       enabledModules: PROXY_GROUP_MODULES.map((proxyModule) => proxyModule.id),
       customRules: [],
-      customProxyGroups: [],
+      customRuleSets: [],
       fallbackPolicyTarget: "DIRECT",
     };
     const baselineOrder = buildGeneratedRuleEntries(options)
@@ -203,18 +205,17 @@ describe("rule generator", () => {
       for (const rule of proxyModule.rules) {
         const sourceKey = `module:${proxyModule.id}:${rule.id}`;
         const targetModuleId = proxyModule.id === "google" ? "ai" : "google";
-        const movedKey = `module:${targetModuleId}:${rule.id}`;
         const baselineIndex = baselineOrder.indexOf(sourceKey);
         expect(baselineIndex).toBeGreaterThanOrEqual(0);
 
         const afterDeleteOrder = normalizePersistedRuleOrder({
           ...options,
-          moduleRuleExclusions: { [proxyModule.id]: [rule.id] },
+          builtinRuleEdits: { [sourceKey]: { enabled: false } },
           ruleOrder: baselineOrder,
         });
         const afterDeleteApplied = resolveAppliedRuleOrder({
           ...options,
-          moduleRuleExclusions: { [proxyModule.id]: [rule.id] },
+          builtinRuleEdits: { [sourceKey]: { enabled: false } },
           ruleOrder: afterDeleteOrder,
         });
         const afterRestoreApplied = resolveAppliedRuleOrder({
@@ -223,14 +224,12 @@ describe("rule generator", () => {
         });
         const afterMoveOrder = normalizePersistedRuleOrder({
           ...options,
-          moduleRuleExclusions: { [proxyModule.id]: [rule.id] },
-          moduleRuleOverrides: { [targetModuleId]: [rule] },
+          builtinRuleEdits: { [sourceKey]: { target: resolveModuleName(targetModuleId) } },
           ruleOrder: baselineOrder,
         });
         const afterMoveApplied = resolveAppliedRuleOrder({
           ...options,
-          moduleRuleExclusions: { [proxyModule.id]: [rule.id] },
-          moduleRuleOverrides: { [targetModuleId]: [rule] },
+          builtinRuleEdits: { [sourceKey]: { target: resolveModuleName(targetModuleId) } },
           ruleOrder: afterMoveOrder,
         });
 
@@ -238,7 +237,7 @@ describe("rule generator", () => {
         expect(afterDeleteApplied).not.toContain(sourceKey);
         expect(afterRestoreApplied.indexOf(sourceKey)).toBe(baselineIndex);
         expect(afterMoveOrder).toContain(sourceKey);
-        expect(afterMoveApplied.indexOf(movedKey)).toBe(baselineIndex);
+        expect(afterMoveApplied.indexOf(sourceKey)).toBe(baselineIndex);
       }
     }
   });
@@ -247,7 +246,7 @@ describe("rule generator", () => {
     const options = {
       enabledModules: ["ad", "private", "global", "final"],
       customRules,
-      customProxyGroups: [],
+      customRuleSets: [],
       fallbackPolicyTarget: "DIRECT",
     };
     const entries = buildGeneratedRuleEntries(options);
@@ -276,13 +275,13 @@ describe("rule generator", () => {
             noResolve: true,
           },
         ],
-        customProxyGroups: [
+        customRuleSets: [
           {
-            id: "plain",
-            name: "Plain",
-            emoji: "P",
-            groupType: "select",
-            rules: [{ id: "plain-rule", name: "Plain Rule", behavior: "domain", url: "https://rules.example.com/plain.mrs" }],
+            id: "plain-rule",
+            name: "Plain Rule",
+            behavior: "domain",
+            path: "https://rules.example.com/plain.mrs",
+            target: "Plain",
           },
         ],
         fallbackPolicyTarget: "DIRECT",
@@ -299,9 +298,246 @@ describe("rule generator", () => {
       normalizePersistedRuleOrder({
         enabledModules: ["streaming-west"],
         customRules: [],
-        customProxyGroups: [],
+        customRuleSets: [],
         ruleOrder: ["special:apple-tvplus", "module:streaming-west:apple-tvplus"],
       })
     ).toEqual(["module:streaming-west:apple-tvplus"]);
+  });
+
+  it("keeps module-targeted custom rules while dropping disabled custom-group targets", () => {
+    const entries = buildGeneratedRuleEntries({
+      enabledModules: ["private", "apple"],
+      customProxyGroups: [
+        { id: "disabled", name: "Disabled", emoji: "", groupType: "select", enabled: false },
+      ],
+      customRules: [
+        {
+          id: "module-target",
+          type: "DOMAIN",
+          value: "module.example",
+          target: { kind: "module", id: "select" },
+          noResolve: true,
+        },
+        {
+          id: "disabled-name",
+          type: "DOMAIN",
+          value: "disabled-name.example",
+          target: "Disabled",
+        },
+        {
+          id: "disabled-ref",
+          type: "DOMAIN",
+          value: "disabled-ref.example",
+          target: { kind: "custom", id: "disabled" },
+        },
+      ],
+      customRuleSets: [
+        {
+          id: "module-set",
+          name: "Module Set",
+          behavior: "domain",
+          path: "https://rules.example.com/module.mrs",
+          target: { kind: "module", id: "select" },
+        },
+      ],
+      fallbackPolicyTarget: "DIRECT",
+    });
+    const texts = entries.map((entry) => entry.text);
+
+    expect(texts).toContain("DOMAIN,module.example,🚀 节点选择");
+    expect(texts).toContain("RULE-SET,module-set,🚀 节点选择");
+    expect(texts.some((text) => text.includes("disabled-name.example"))).toBe(false);
+    expect(texts.some((text) => text.includes("disabled-ref.example"))).toBe(false);
+    expect(texts.some((text) => text.startsWith("RULE-SET,private-ip,🏠 私有网络,no-resolve"))).toBe(true);
+    expect(texts.some((text) => text.startsWith("RULE-SET,apple,🍏 苹果服务"))).toBe(true);
+
+    expect(hasFullRuleOrderKeys(undefined)).toBe(false);
+    expect(
+      normalizePersistedRuleOrder({
+        enabledModules: [],
+        customRules,
+        customRuleSets: [],
+        ruleOrder: undefined,
+      })
+    ).toEqual([]);
+    expect(
+      resolveAppliedRuleOrder({
+        enabledModules: [],
+        customRules,
+        customRuleSets: [],
+        ruleOrder: ["module:global:geolocation-!cn"],
+      })
+    ).toEqual(["custom-rule:domain-rule", "custom-rule:ip-rule"]);
+  });
+
+  it("applies builtin module target edits and cn no-resolve overrides", () => {
+    const entries = buildGeneratedRuleEntries({
+      enabledModules: ["cn"],
+      customRules: [],
+      customRuleSets: [],
+      customProxyGroups: [
+        { id: "regional", name: "Regional", emoji: "R", groupType: "select" },
+      ],
+      builtinRuleEdits: {
+        "module:cn:cn-ip": { target: { kind: "custom", id: "regional" } },
+      },
+      cnIpNoResolve: true,
+      availablePolicyTargets: ["Regional", "DIRECT"],
+      fallbackPolicyTarget: "DIRECT",
+    });
+    const texts = entries.map((entry) => entry.text);
+
+    expect(texts).toContain("RULE-SET,cn-ip,Regional,no-resolve");
+    expect(texts).toContain("MATCH,DIRECT");
+    expect(entries.find((entry) => entry.key === "module:cn:cn-ip")).toMatchObject({
+      noResolve: true,
+      sourceLabel: "🔒 国内服务",
+      target: "Regional",
+    });
+  });
+
+  it("cleans noisy persisted full-order keys without losing active editable rules", () => {
+    const applied = resolveAppliedRuleOrder({
+      enabledModules: ["global"],
+      customRules,
+      customRuleSets,
+      ruleOrder: [
+        " module:global:geolocation-!cn ",
+        "module:global:geolocation-!cn",
+        1 as never,
+        "custom-rule:ip-rule",
+        "custom-rule:missing",
+        "module:unknown:missing",
+        "special:match",
+      ],
+      fallbackPolicyTarget: "DIRECT",
+    });
+    const persisted = normalizePersistedRuleOrder({
+      enabledModules: ["global"],
+      customRules,
+      customRuleSets,
+      ruleOrder: [
+        " module:global:geolocation-!cn ",
+        "module:global:geolocation-!cn",
+        1 as never,
+        "custom-rule:ip-rule",
+        "custom-rule:missing",
+        "module:unknown:missing",
+        "special:match",
+      ],
+      fallbackPolicyTarget: "DIRECT",
+    });
+
+    expect(persisted).toEqual(["module:global:geolocation-!cn", "custom-rule:ip-rule"]);
+    expect(applied).toEqual([
+      "custom-rule:domain-rule",
+      "custom-rule-set:media-rule",
+      "module:global:geolocation-!cn",
+      "custom-rule:ip-rule",
+    ]);
+  });
+
+  it("applies fallback policy targets and no-resolve guards for mixed custom rules", () => {
+    const entries = buildGeneratedRuleEntries({
+      enabledModules: ["cn", "global", "final"],
+      customRules: [
+        {
+          id: "cidr6",
+          type: "IP-CIDR6",
+          value: "2001:db8::/32",
+          target: "Missing",
+          noResolve: true,
+        },
+        {
+          id: "process",
+          type: "PROCESS-NAME",
+          value: "curl",
+          target: "DIRECT",
+          noResolve: true,
+        },
+      ],
+      customRuleSets: [
+        {
+          id: "fallback-set",
+          name: "Fallback Set",
+          behavior: "domain",
+          path: "https://rules.example.com/fallback.mrs",
+          target: "Missing",
+          noResolve: false,
+        },
+        {
+          id: "custom-set",
+          name: "Custom Set",
+          behavior: "classical",
+          path: "https://rules.example.com/custom.yaml",
+          target: { kind: "custom", id: "regional" },
+          noResolve: true,
+        },
+      ],
+      customProxyGroups: [
+        { id: "regional", name: "Regional", emoji: "", groupType: "select" },
+      ],
+      builtinRuleEdits: {
+        "module:cn:cn-ip": { enabled: false },
+        "module:global:geolocation-!cn": { target: "Missing" },
+      },
+      experimentalCnUseCnRuleSet: true,
+      cnIpNoResolve: true,
+      availablePolicyTargets: ["DIRECT", "Regional", "🐟 漏网之鱼"],
+      fallbackPolicyTarget: "DIRECT",
+      ruleOrder: [
+        "module:cn:cn-ip",
+        "custom-rule:process",
+        "custom-rule-set:custom-set",
+        "special:experimental-cn",
+        "special:match",
+      ],
+    });
+    const texts = entries.map((entry) => entry.text);
+    const persisted = normalizePersistedRuleOrder({
+      enabledModules: ["cn", "global", "final"],
+      customRules: [
+        { id: "cidr6", type: "IP-CIDR6", value: "2001:db8::/32", target: "Missing", noResolve: true },
+        { id: "process", type: "PROCESS-NAME", value: "curl", target: "DIRECT", noResolve: true },
+      ],
+      customRuleSets: [
+        {
+          id: "custom-set",
+          name: "Custom Set",
+          behavior: "classical",
+          path: "https://rules.example.com/custom.yaml",
+          target: { kind: "custom", id: "regional" },
+          noResolve: true,
+        },
+      ],
+      builtinRuleEdits: {
+        "module:cn:cn-ip": { enabled: false },
+      },
+      ruleOrder: [
+        "module:cn:cn-ip",
+        "custom-rule:process",
+        "custom-rule:missing",
+        "special:experimental-cn",
+        "special:match",
+      ],
+      experimentalCnUseCnRuleSet: true,
+      fallbackPolicyTarget: "DIRECT",
+    });
+
+    expect(texts).toContain("IP-CIDR6,2001:db8::/32,DIRECT,no-resolve");
+    expect(texts).toContain("PROCESS-NAME,curl,DIRECT");
+    expect(texts).not.toContain("PROCESS-NAME,curl,DIRECT,no-resolve");
+    expect(texts).toContain("RULE-SET,fallback-set,DIRECT");
+    expect(texts).toContain("RULE-SET,custom-set,Regional,no-resolve");
+    expect(texts).not.toContain("RULE-SET,cn-ip,🔒 国内服务,no-resolve");
+    expect(texts).toContain("RULE-SET,geolocation-!cn,DIRECT");
+    expect(texts).toContain("RULE-SET,cn,DIRECT");
+    expect(texts).toContain("RULE-SET,geolocation-cn,DIRECT");
+    expect(texts.at(-1)).toBe("MATCH,🐟 漏网之鱼");
+    expect(persisted).toEqual([
+      "module:cn:cn-ip",
+      "custom-rule:process",
+      "special:experimental-cn",
+    ]);
   });
 });

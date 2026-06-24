@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  buttons: [] as any[],
   dashboardAdapter: null as any,
   homeAdapter: null as any,
   readJsonResponse: vi.fn(),
@@ -22,7 +23,10 @@ vi.mock("lucide-react", () => ({
 }));
 
 vi.mock("@subboost/ui/components/ui/button", () => ({
-  Button: (props: any) => React.createElement("button", props, props.children),
+  Button: (props: any) => {
+    mocks.buttons.push(props);
+    return React.createElement("button", props, props.children);
+  },
 }));
 
 vi.mock("@subboost/ui/components/ui/card", () => ({
@@ -62,7 +66,12 @@ vi.mock("@subboost/ui/templates/template-library-surface", () => ({
   },
 }));
 
+vi.mock("@local/components/local-login", () => ({
+  LocalLogin: () => React.createElement("main", null, "LocalLogin"),
+}));
+
 import DashboardPage from "./dashboard/page";
+import LoginPage from "./login/page";
 import SettingsPage from "./dashboard/settings/page";
 import manifest from "./manifest";
 import HomePage from "./page";
@@ -75,6 +84,7 @@ describe("local app pages and adapters", () => {
     mocks.dashboardAdapter = null;
     mocks.homeAdapter = null;
     mocks.templateAdapter = null;
+    mocks.buttons = [];
     mocks.userState = {
       fetchUser: vi.fn(),
       logout: vi.fn(),
@@ -93,6 +103,10 @@ describe("local app pages and adapters", () => {
         { src: "/icon.png", purpose: "maskable" },
       ],
     });
+  });
+
+  it("renders the local login page wrapper", () => {
+    expect(renderToStaticMarkup(React.createElement(LoginPage))).toBe("<main>LocalLogin</main>");
   });
 
   it("connects the local home adapter to local API routes", async () => {
@@ -200,11 +214,16 @@ describe("local app pages and adapters", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/templates?id=tpl%201", { method: "DELETE" });
   });
 
-  it("renders local settings for anonymous and authenticated states", () => {
+  it("renders local settings for anonymous and authenticated states", async () => {
     let html = renderToStaticMarkup(React.createElement(SettingsPage));
     expect(html).toContain("未登录");
     expect(html).toContain("/api/health/live");
+    expect(mocks.buttons.find((button: any) => button.variant === "destructive")).toMatchObject({
+      disabled: true,
+    });
 
+    vi.stubGlobal("window", { location: { href: "" } });
+    mocks.buttons = [];
     mocks.userState = {
       fetchUser: vi.fn(),
       logout: vi.fn(),
@@ -213,5 +232,12 @@ describe("local app pages and adapters", () => {
     html = renderToStaticMarkup(React.createElement(SettingsPage));
     expect(html).toContain("admin");
     expect(html).toContain("2 / 9999");
+    const logoutButton = mocks.buttons.find((button: any) => button.variant === "destructive");
+    expect(logoutButton).toMatchObject({ disabled: false });
+    logoutButton.onClick();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mocks.userState.logout).toHaveBeenCalledTimes(1);
+    expect(window.location.href).toBe("/login");
   });
 });

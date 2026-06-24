@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { looksLikeConfigLine } from "./config-line-parser";
 import { mustParseConfigLine } from "./config-line-parser.test-helpers";
 import {
+  applyCommonNodeParams,
+  applyTransport,
   inferSkipCertVerify,
   isUuidLike,
   parseBooleanish,
@@ -34,6 +36,10 @@ describe("config line tokenizer helpers", () => {
     });
     expect(() => tokenizeConfigLine("broken")).toThrow("无效的配置行格式");
     expect(() => tokenizeConfigLine("Bad = ss, example.com, 70000")).toThrow("配置行中的地址或端口无效");
+    expect(tokenizeConfigLine("Ignored = ss, ignored.example.com, 8388, =empty, flag")).toMatchObject({
+      params: {},
+      extras: ["flag"],
+    });
   });
 
   it("normalizes common primitive params", () => {
@@ -45,6 +51,7 @@ describe("config line tokenizer helpers", () => {
     expect(parseStringList("a, b,,c")).toEqual(["a", "b", "c"]);
     expect(parseWsHeaders(undefined)).toBeUndefined();
     expect(parseWsHeaders("bad|also-bad")).toBeUndefined();
+    expect(parseWsHeaders("Host:|:missing|Good:yes")).toEqual({ Good: "yes" });
     expect(parseWsHeaders('Host:cdn.example.com|X-Test:"yes"')).toEqual({
       Host: "cdn.example.com",
       "X-Test": "yes",
@@ -58,6 +65,150 @@ describe("config line tokenizer helpers", () => {
     expect(inferSkipCertVerify({ "tls-verification": "false" })).toBe(true);
     expect(inferSkipCertVerify({ "tls-verification": "true" })).toBeUndefined();
     expect(inferSkipCertVerify({ "allow-insecure": "0" })).toBe(false);
+  });
+
+  it("applies shared node params to non-VMess protocols and rare TLS aliases", () => {
+    const trojan: Record<string, unknown> = { type: "trojan" };
+    applyCommonNodeParams(trojan, {
+      peer: "trojan-sni.example.com",
+      "tls-cert-sha256": "cert",
+      "tls_pubkey_sha256": "pub",
+      "disable-sni": "true",
+      "block-quic": "true",
+      "udp-port": "53",
+      "fast-open": "false",
+      "shadow-tls-version": "3",
+      "shadow-tls-sni": "shadow.example.com",
+      "shadow-tls-password": "shadow-secret",
+    });
+
+    expect(trojan).toMatchObject({
+      sni: "trojan-sni.example.com",
+      "tls-cert-sha256": "cert",
+      "tls-pubkey-sha256": "pub",
+      "disable-sni": true,
+      "block-quic": true,
+      "udp-port": 53,
+      tfo: false,
+      "shadow-tls-version": 3,
+      "shadow-tls-sni": "shadow.example.com",
+      "shadow-tls-password": "shadow-secret",
+    });
+
+    const hysteria2: Record<string, unknown> = { type: "hysteria2" };
+    applyCommonNodeParams(hysteria2, { fingerprint: "chrome" });
+    expect(hysteria2).toMatchObject({ fingerprint: "chrome" });
+  });
+
+  it("applies transport helpers across default, header, and xHTTP edge branches", () => {
+    const defaultWs: Record<string, unknown> = {};
+    applyTransport(defaultWs, { "ws-path": "/ws?ed=128", "ws-headers": "Host:from-header.example.com|X-Test:yes" }, {
+      defaultTransport: "ws",
+    });
+    expect(defaultWs).toMatchObject({
+      network: "ws",
+      "ws-opts": {
+        path: "/ws",
+        headers: {
+          Host: "from-header.example.com",
+          "X-Test": "yes",
+        },
+        "early-data-header-name": "Sec-WebSocket-Protocol",
+        "max-early-data": 128,
+      },
+    });
+
+    const plainGrpc: Record<string, unknown> = {};
+    applyTransport(plainGrpc, { transport: "grpc", path: "/svc" });
+    expect(plainGrpc).toMatchObject({
+      network: "grpc",
+      "grpc-opts": {
+        "grpc-service-name": "svc",
+      },
+    });
+
+    const blankHttp: Record<string, unknown> = {};
+    applyTransport(blankHttp, { transport: "http", method: "   ", path: " , " });
+    expect(blankHttp).toMatchObject({
+      network: "http",
+      "http-opts": {
+        method: "GET",
+        path: ["/"],
+        headers: undefined,
+      },
+    });
+
+    const xhttp: Record<string, unknown> = {};
+    applyTransport(xhttp, {
+      transport: "xhttp",
+      path: "/x",
+      host: "cdn.example.com",
+      mode: "packet-up",
+      "xhttp-headers": "User-Agent:SubBoost",
+      "no-grpc-header": "off",
+      "sc-max-each-post-bytes": "bad",
+      "download-headers": "Accept:yaml",
+    }, {
+      allowedTransports: ["tcp", "xhttp"],
+    });
+    expect(xhttp).toMatchObject({
+      network: "xhttp",
+      "xhttp-opts": {
+        path: "/x",
+        host: "cdn.example.com",
+        mode: "packet-up",
+        headers: { "User-Agent": "SubBoost" },
+        "no-grpc-header": false,
+        "download-settings": {
+          headers: { Accept: "yaml" },
+        },
+      },
+    });
+
+    expect(() => applyTransport({}, { transport: "udp" }, { allowedTransports: ["tcp"], protocolName: "测试" })).toThrow(
+      "不支持的 测试 传输层"
+    );
+    expect(() => applyTransport({}, { transport: " " }, { allowedTransports: ["tcp"] })).toThrow(
+      "transport=(empty)"
+    );
+
+    const tcp: Record<string, unknown> = {};
+    applyTransport(tcp, { transport: "tcp" });
+    expect(tcp).toMatchObject({ network: "tcp" });
+
+    const xhttpAliases: Record<string, unknown> = {};
+    applyTransport(xhttpAliases, {
+      network: "xhttp",
+      path: "/alias",
+      headers: "Host:edge.example.com",
+      "max-connections": "2",
+      "c-max-reuse-times": "3",
+      "h-max-request-times": "4",
+      "h-max-reusable-secs": "5",
+      no_grpc_header: "yes",
+      sc_max_each_post_bytes: "4096",
+      downloadheaders: "Accept:yaml",
+    }, {
+      allowedTransports: ["tcp", "xhttp"],
+    });
+    expect(xhttpAliases).toMatchObject({
+      network: "xhttp",
+      "xhttp-opts": {
+        path: "/alias",
+        headers: { Host: "edge.example.com" },
+        "no-grpc-header": true,
+        "sc-max-each-post-bytes": 4096,
+        "reuse-settings": {
+          "max-connections": "2",
+          "c-max-reuse-times": "3",
+          "h-max-request-times": "4",
+          "h-max-reusable-secs": "5",
+        },
+        "download-settings": {
+          headers: { Accept: "yaml" },
+        },
+      },
+    });
   });
 });
 
@@ -550,5 +701,81 @@ describe("config line parser", () => {
     expect(() => mustParseConfigLine("BadType = unknown, unknown.example.com, 443")).toThrow(
       "不支持的配置行协议: unknown"
     );
+  });
+
+  it("builds rare config-line aliases and conservative defaults", () => {
+    expect(mustParseConfigLine("SOCKS5 TLS Alias = socks5-tls, socks-tls-alias.example.com, 1080, over-tls=false")).toMatchObject({
+      name: "SOCKS5 TLS Alias",
+      type: "socks5",
+      tls: false,
+    });
+
+    const httpNoHeaders = mustParseConfigLine("HTTP No Headers = http, http-no-headers.example.com, 8080, headers=bad|Host:");
+    expect(httpNoHeaders).toMatchObject({
+      name: "HTTP No Headers",
+      type: "http",
+      server: "http-no-headers.example.com",
+    });
+    expect(httpNoHeaders.headers).toBeUndefined();
+
+    expect(
+      mustParseConfigLine(
+        "VMess Username = vmess, vmess-user.example.com, 443, username=11111111-1111-4111-8111-111111111111, encryption=auto, udp-relay=false, tls-verification=false, fp=chrome"
+      )
+    ).toMatchObject({
+      name: "VMess Username",
+      type: "vmess",
+      uuid: "11111111-1111-4111-8111-111111111111",
+      cipher: "auto",
+      udp: false,
+      "skip-cert-verify": true,
+      "client-fingerprint": "chrome",
+    });
+
+    expect(
+      mustParseConfigLine(
+        "VLESS Alias = vless, vless-alias.example.com, 443, username=11111111-1111-4111-8111-111111111111, public_key=pub, short_id=sid, packetencoding=xudp, fingerprint=edge, udp-relay=false"
+      )
+    ).toMatchObject({
+      name: "VLESS Alias",
+      type: "vless",
+      uuid: "11111111-1111-4111-8111-111111111111",
+      udp: false,
+      "packet-encoding": "xudp",
+      "client-fingerprint": "edge",
+      "reality-opts": {
+        "public-key": "pub",
+        "short-id": "sid",
+      },
+    });
+
+    expect(
+      mustParseConfigLine("AnyTLS None = anytls, anytls-none.example.com, 443, auth=secret, transport=none, server-name=sni.example.com")
+    ).toMatchObject({
+      name: "AnyTLS None",
+      type: "anytls",
+      password: "secret",
+      sni: "sni.example.com",
+    });
+
+    expect(
+      mustParseConfigLine(
+        "TUIC Alias = tuic, tuic-alias.example.com, 443, uuid=11111111-1111-4111-8111-111111111111, password=secret, congestioncontrol=cubic, udprelaymode=quic, tfo=false"
+      )
+    ).toMatchObject({
+      name: "TUIC Alias",
+      type: "tuic",
+      uuid: "11111111-1111-4111-8111-111111111111",
+      password: "secret",
+      "congestion-controller": "cubic",
+      "udp-relay-mode": "quic",
+      tfo: false,
+    });
+
+    expect(mustParseConfigLine("Snell Loose = snell, snell-loose.example.com, 443, psk=secret, version=bad")).toMatchObject({
+      name: "Snell Loose",
+      type: "snell",
+      psk: "secret",
+    });
   });
 });

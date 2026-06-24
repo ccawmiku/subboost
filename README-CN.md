@@ -4,7 +4,7 @@
   <h1>SubBoost</h1>
   <p>
     <img src="https://img.shields.io/badge/platform-Linux%20%2B%20Docker-lightgrey.svg" alt="平台：Linux + Docker">
-    <img src="https://img.shields.io/badge/version-2.4.0-green.svg" alt="版本 2.4.0">
+    <img src="https://img.shields.io/badge/version-2.5.0-green.svg" alt="版本 2.5.0">
     <a href="https://subboost.org"><img src="https://img.shields.io/badge/app-subboost.org-brightgreen.svg" alt="在线入口"></a>
     <a href="https://docs.subboost.org"><img src="https://img.shields.io/badge/docs-subboost.org-blue.svg" alt="文档"></a>
     <img src="https://img.shields.io/badge/image-GHCR-blue.svg" alt="GHCR 镜像">
@@ -19,7 +19,7 @@
 
 - **订阅转换**：支持订阅链接、YAML 文件和节点链接等多种格式导入。
 - **节点管理**：支持批量对节点重命名、删除或配置监听端口。
-- **节点筛选**：可按导入源、地区和自定义规则，构建只有部分节点的 `筛选代理组`。
+- **节点筛选**：可在分流组高级模式中按导入源、地区和自定义规则筛选节点。
 - **链式代理**：一键可视化配置链式代理和 `中转代理组`。
 - **精确分流**：内置 30 多个常用代理组和 2000 多条远程规则集供启用。
 - **规则管理**：可修改规则顺序，供高级用户深度自定义。

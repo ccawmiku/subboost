@@ -9,6 +9,8 @@
 /**
  * 分流代理组规则
  */
+import type { ProxyGroupGroupType } from "@subboost/core/types/config";
+
 export interface ProxyGroupRule {
   id: string;
   name: string;
@@ -26,7 +28,7 @@ export interface ProxyGroupModule {
   emoji: string;
   category: "core" | "service" | "media" | "social" | "game" | "tech" | "finance" | "other";
   description: string;
-  groupType: "select" | "url-test" | "fallback" | "reject-first" | "direct-first";
+  groupType: ProxyGroupGroupType;
   rules: ProxyGroupRule[];
 }
 export const PROXY_GROUP_MODULES: ProxyGroupModule[] = [
@@ -495,5 +497,4 @@ export const PROXY_GROUP_MODULES: ProxyGroupModule[] = [
     ],
   },
 ];
-
 

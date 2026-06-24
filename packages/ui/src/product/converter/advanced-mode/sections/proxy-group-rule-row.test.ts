@@ -51,7 +51,6 @@ const targets = [
   { kind: "module", id: "auto", name: "Auto" },
   { kind: "module", id: "fallback", name: "Fallback" },
   { kind: "custom", id: "custom-1", name: "Custom" },
-  { kind: "filtered", id: "filtered-1", name: "Filtered" },
 ] as any[];
 
 describe("proxy group rule row components", () => {
@@ -63,7 +62,7 @@ describe("proxy group rule row components", () => {
   it("detects move targets and renders active, moved, and removed rows", () => {
     expect(isRuleSetMoveTarget(targets[0])).toBe(true);
     expect(isRuleSetMoveTarget(targets[2])).toBe(true);
-    expect(isRuleSetMoveTarget(targets[3])).toBe(false);
+    expect(isRuleSetMoveTarget({ kind: "filtered", id: "filtered-1", name: "Filtered" } as never)).toBe(false);
 
     const active = renderToStaticMarkup(
       React.createElement(ProxyGroupRuleRow, {
@@ -175,7 +174,7 @@ describe("proxy group rule row components", () => {
 
     expect(html).toContain("example.com");
     expect(html).toContain("DOMAIN-SUFFIX,example.com,Proxy,no-resolve");
-    expect(html).toContain("手动");
+    expect(html).toContain("自定义");
     expect(captures.buttons.find((props) => props.title === "移动规则")).toBeTruthy();
     captures.menuItems.find((props) => props.children === "Custom").onSelect();
     expect(onMove).toHaveBeenCalledWith(item, targets[2]);
@@ -191,16 +190,15 @@ describe("proxy group rule row components", () => {
         title: "移动规则集",
         ariaLabel: "移动规则集",
         targets: [targets[0], targets[2]],
-        kinds: ["module", "custom", "filtered"],
+        kinds: ["module", "custom"],
         currentTarget: { kind: "module", id: "auto", name: "Auto" },
         onMove,
       })
     );
 
-    expect(html).toContain("内置分流组");
-    expect(html).toContain("自定义分组");
-    expect(html).toContain("筛选组");
-    expect(html).toContain("暂无筛选组");
+    expect(html).toContain("内置组");
+    expect(html).toContain("自定义组");
+    expect(html).not.toContain("筛选组");
     expect(captures.menuItems.find((props) => props.children === "Auto").disabled).toBe(true);
     expect(captures.menuItems.find((props) => props.children === "Custom").disabled).toBe(false);
 
