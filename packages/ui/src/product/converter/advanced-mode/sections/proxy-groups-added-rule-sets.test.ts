@@ -252,8 +252,8 @@ describe("ProxyGroupsAddedRuleSets", () => {
       switches: [],
     };
     mocks.ruleSets = [moduleItem, customItem];
-    for (const module of PROXY_GROUP_MODULES as Array<{ rules?: unknown[] }>) {
-      module.rules = [];
+    for (const proxyModule of PROXY_GROUP_MODULES as Array<{ rules?: unknown[] }>) {
+      proxyModule.rules = [];
     }
     mocks.effectiveRules = [];
     mocks.store = {

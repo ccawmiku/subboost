@@ -9,7 +9,7 @@ import { PROXY_GROUP_MODULES, type ProxyGroupModule } from "@subboost/core/gener
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
 import { resolveProxyGroupTargetName } from "@subboost/core/proxy-group-targets";
 import { DEFAULT_LOAD_BALANCE_STRATEGY, type LoadBalanceStrategy, type ProxyGroupGroupType } from "@subboost/core/types/config";
-import { useConfigStore, type CustomProxyGroup } from "@subboost/ui/store/config-store";
+import { useConfigStore } from "@subboost/ui/store/config-store";
 import { useProductInteractionAdapter } from "@subboost/ui/product/interactions";
 import {
   buildManualRuleTargets,
@@ -31,6 +31,7 @@ import { ProxyGroupAdvancedPanel } from "./proxy-group-advanced-panel";
 import {
   buildProxyGroupName,
   parseProxyGroupNameDraft,
+  pickRandomEmoji,
   ProxyGroupNameEditor,
   toProxyGroupNameDraft,
   type ProxyGroupNameDraft,
@@ -62,14 +63,11 @@ export function ProxyGroupsCustomGroupsPanel({
   } = useConfigStore();
 
   const [expandedCustomGroups, setExpandedCustomGroups] = React.useState<Set<string>>(new Set());
-  const [newCustomGroupDraft, setNewCustomGroupDraft] = React.useState<ProxyGroupNameDraft>({
-    emoji: "🧩",
+  const [newCustomGroupDraft, setNewCustomGroupDraft] = React.useState<ProxyGroupNameDraft>(() => ({
+    emoji: pickRandomEmoji(),
     name: "",
-  });
+  }));
   const [newCustomGroupDescription, setNewCustomGroupDescription] = React.useState("");
-  const [newCustomGroupType, setNewCustomGroupType] = React.useState<CustomProxyGroup["groupType"]>("select");
-  const [newCustomGroupStrategy, setNewCustomGroupStrategy] =
-    React.useState<LoadBalanceStrategy>(DEFAULT_LOAD_BALANCE_STRATEGY);
   const [editingCustomGroupId, setEditingCustomGroupId] = React.useState<string | null>(null);
   const [editingCustomGroupName, setEditingCustomGroupName] = React.useState("");
   const [editingCustomGroupDescription, setEditingCustomGroupDescription] = React.useState("");
@@ -185,8 +183,8 @@ export function ProxyGroupsCustomGroupsPanel({
   return (
     <div className="space-y-2">
       {/* 新建自定义分组 */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="grid min-w-0 flex-[1_1_28rem] grid-cols-[minmax(0,1fr)_minmax(0,1.47fr)] gap-1.5">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5">
+        <div className="grid min-w-0 grid-cols-[minmax(5.75rem,1fr)_minmax(0,1.47fr)] gap-1.5">
           <ProxyGroupNameEditor
             value={newCustomGroupDraft}
             onChange={setNewCustomGroupDraft}
@@ -197,19 +195,6 @@ export function ProxyGroupsCustomGroupsPanel({
             onChange={(event) => setNewCustomGroupDescription(event.target.value)}
             placeholder="描述文本（默认: 自定义代理组）"
             className="h-7 min-w-0 border-white/10 bg-white/5 text-xs"
-          />
-        </div>
-        <div className="w-[120px]">
-          <ProxyGroupTypeMenu
-            value={newCustomGroupType as ProxyGroupTypeMenuValue}
-            strategy={newCustomGroupStrategy}
-            onChange={({ groupType, strategy }) => {
-              setNewCustomGroupType(groupType as CustomProxyGroup["groupType"]);
-              if (groupType === "load-balance") {
-                setNewCustomGroupStrategy(strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY);
-              }
-            }}
-            triggerClassName="h-7 text-[10px]"
           />
         </div>
         <Button
@@ -235,11 +220,10 @@ export function ProxyGroupsCustomGroupsPanel({
               name: full,
               emoji,
               description: newCustomGroupDescription.trim(),
-              groupType: newCustomGroupType,
-              ...(newCustomGroupType === "load-balance" ? { strategy: newCustomGroupStrategy } : {}),
+              groupType: "select",
             });
-            interactions.proxyGroupAdded?.({ groupType: newCustomGroupType });
-            setNewCustomGroupDraft({ emoji: "🧩", name: "" });
+            interactions.proxyGroupAdded?.({ groupType: "select" });
+            setNewCustomGroupDraft({ emoji: pickRandomEmoji(emoji), name: "" });
             setNewCustomGroupDescription("");
           }}
           title="新增"

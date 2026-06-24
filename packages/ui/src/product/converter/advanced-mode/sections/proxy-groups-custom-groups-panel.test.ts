@@ -25,7 +25,11 @@ vi.mock("react", async (importOriginal) => {
     useState: (initial: unknown) => {
       if (!stateMock.enabled) return actual.useState(initial);
       const index = stateMock.callIndex++;
-      const value = Object.prototype.hasOwnProperty.call(stateMock.overrides, index) ? stateMock.overrides[index] : initial;
+      const value = Object.prototype.hasOwnProperty.call(stateMock.overrides, index)
+        ? stateMock.overrides[index]
+        : typeof initial === "function"
+          ? (initial as () => unknown)()
+          : initial;
       const setter = vi.fn((next: unknown) => {
         const resolved = typeof next === "function" ? (next as (prev: unknown) => unknown)(value) : next;
         (setter as any).lastValue = resolved;
@@ -185,8 +189,9 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
     };
   });
 
-  it("adds groups, changes draft type, and rejects duplicates", () => {
-    const { setters } = renderPanel({ 1: { emoji: "🧩", name: "New" }, 2: "Useful group", 3: "select", 4: "consistent-hashing" });
+  it("adds manual groups with a random reset emoji and rejects duplicates", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { setters } = renderPanel({ 1: { emoji: "🧩", name: "New" }, 2: "Useful group" });
 
     const nameInput = mocks.captures.inputs.find((props: any) => props.placeholder === "自定义分组名称");
     nameInput.onChange({ target: { value: "Typed" } });
@@ -195,11 +200,7 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
     descriptionInput.onChange({ target: { value: "Next description" } });
     expect(setters[2]).toHaveBeenCalledWith("Next description");
 
-    mocks.captures.typeMenus[0].onChange({ groupType: "load-balance", strategy: "round-robin" });
-    expect(setters[3]).toHaveBeenCalledWith("load-balance");
-    expect(setters[4]).toHaveBeenCalledWith("round-robin");
-    mocks.captures.typeMenus[0].onChange({ groupType: "select" });
-    expect(setters[3]).toHaveBeenCalledWith("select");
+    expect(mocks.captures.typeMenus.every((props: any) => props.trigger)).toBe(true);
 
     mocks.captures.buttons.find((props: any) => props.title === "新增").onClick();
     expect(mocks.store.addCustomProxyGroup).toHaveBeenCalledWith({
@@ -209,7 +210,7 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
       groupType: "select",
     });
     expect(mocks.interactions.proxyGroupAdded).toHaveBeenCalledWith({ groupType: "select" });
-    expect(setters[1]).toHaveBeenCalledWith({ emoji: "🧩", name: "" });
+    expect(setters[1]).toHaveBeenCalledWith({ emoji: "🚀", name: "" });
     expect(setters[2]).toHaveBeenCalledWith("");
 
     renderPanel({ 1: { emoji: "🧩", name: "Custom" } });
@@ -217,28 +218,27 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "代理组名称已存在，请换一个名称。", variant: "warning" }));
   });
 
-  it("ignores blank new group names and keeps load-balance strategy on add", () => {
-    renderPanel({ 1: { emoji: "🧩", name: "   " }, 3: "select" });
+  it("ignores blank new group names and always adds as manual select", () => {
+    renderPanel({ 1: { emoji: "🧩", name: "   " } });
     mocks.captures.buttons.find((props: any) => props.title === "新增").onClick();
     expect(mocks.store.addCustomProxyGroup).not.toHaveBeenCalled();
 
-    renderPanel({ 1: { emoji: "🧩", name: "Balanced" }, 2: "  LB group  ", 3: "load-balance", 4: "round-robin" });
+    renderPanel({ 1: { emoji: "🧩", name: "Balanced" }, 2: "  LB group  " });
     mocks.captures.buttons.find((props: any) => props.title === "新增").onClick();
     expect(mocks.store.addCustomProxyGroup).toHaveBeenCalledWith({
       name: "🧩 Balanced",
       emoji: "🧩",
       description: "LB group",
-      groupType: "load-balance",
-      strategy: "round-robin",
+      groupType: "select",
     });
   });
 
   it("renames, removes, and changes existing group type", () => {
-    const { setters } = renderPanel({ 0: new Set(["custom-1"]), 5: "custom-1", 6: "🧩 Renamed", 7: "" });
+    const { setters } = renderPanel({ 0: new Set(["custom-1"]), 3: "custom-1", 4: "🧩 Renamed", 5: "" });
 
     const renameInput = mocks.captures.inputs.find((props: any) => props.autoFocus);
     renameInput.onChange({ target: { value: "Typed Rename" } });
-    expect(setters[6]).toHaveBeenCalledWith("🧩 Typed Rename");
+    expect(setters[4]).toHaveBeenCalledWith("🧩 Typed Rename");
     renameInput.onKeyDown({ key: "Enter" });
     expect(mocks.store.updateCustomProxyGroup).toHaveBeenCalledWith("custom-1", {
       name: "🧩 Renamed",
@@ -246,10 +246,10 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
       description: "",
     });
     renameInput.onKeyDown({ key: "Escape" });
-    expect(setters[5]).toHaveBeenCalledWith(null);
+    expect(setters[3]).toHaveBeenCalledWith(null);
 
     renderPanel({ 0: new Set(["custom-1"]) });
-    mocks.captures.typeMenus[1].onChange({ groupType: "load-balance", strategy: "round-robin" });
+    mocks.captures.typeMenus[0].onChange({ groupType: "load-balance", strategy: "round-robin" });
     expect(mocks.store.updateCustomProxyGroup).toHaveBeenCalledWith("custom-1", {
       groupType: "load-balance",
       strategy: "round-robin",
@@ -308,7 +308,7 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
 
   it("covers custom group edit controls and duplicate rename guard", () => {
     mocks.store.customProxyGroups = [customGroup, { ...targetGroup, name: "🧩 Target" }];
-    const { setters } = renderPanel({ 0: new Set(["custom-1"]), 5: "custom-1", 6: "🧩 Target", 7: "" });
+    const { setters } = renderPanel({ 0: new Set(["custom-1"]), 3: "custom-1", 4: "🧩 Target", 5: "" });
 
     const renameInput = mocks.captures.inputs.find((props: any) => props.autoFocus);
     renameInput.onKeyDown({ key: "Enter" });
@@ -317,25 +317,24 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
     );
     expect(mocks.store.updateCustomProxyGroup).not.toHaveBeenCalled();
 
-    const editButtons = mocks.captures.buttons.filter((props: any) => props.className === "h-7 px-2" && !props.title);
-    editButtons[0].onClick();
+    mocks.captures.buttons.find((props: any) => props.title === "保存").onClick();
     expect(mocks.store.updateCustomProxyGroup).not.toHaveBeenCalled();
 
-    editButtons[1].onClick();
-    expect(setters[5]).toHaveBeenCalledWith(null);
-    expect(setters[6]).toHaveBeenCalledWith("");
-    expect(setters[7]).toHaveBeenCalledWith("");
+    mocks.captures.buttons.find((props: any) => props.title === "取消").onClick();
+    expect(setters[3]).toHaveBeenCalledWith(null);
+    expect(setters[4]).toHaveBeenCalledWith("");
+    expect(setters[5]).toHaveBeenCalledWith("");
 
     renderPanel({ 0: new Set(["custom-1"]) });
     const renameButton = mocks.captures.buttons.find((props: any) => props.title === "改名");
     const stopRenameClick = vi.fn();
     renameButton.onClick({ stopPropagation: stopRenameClick });
     expect(stopRenameClick).toHaveBeenCalled();
-    expect(stateMock.setters[5]).toHaveBeenCalledWith("custom-1");
-    expect(stateMock.setters[6]).toHaveBeenCalledWith("🧩 Custom");
-    expect(stateMock.setters[7]).toHaveBeenCalledWith("");
+    expect(stateMock.setters[3]).toHaveBeenCalledWith("custom-1");
+    expect(stateMock.setters[4]).toHaveBeenCalledWith("🧩 Custom");
+    expect(stateMock.setters[5]).toHaveBeenCalledWith("");
 
-    mocks.captures.typeMenus[1].onChange({ groupType: "select" });
+    mocks.captures.typeMenus[0].onChange({ groupType: "select" });
     expect(mocks.store.updateCustomProxyGroup).toHaveBeenCalledWith("custom-1", {
       groupType: "select",
       strategy: undefined,
@@ -343,7 +342,7 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
   });
 
   it("ignores blank custom group rename commits", () => {
-    renderPanel({ 0: new Set(["custom-1"]), 5: "custom-1", 6: "   ", 7: "desc" });
+    renderPanel({ 0: new Set(["custom-1"]), 3: "custom-1", 4: "   ", 5: "desc" });
 
     const renameInput = mocks.captures.inputs.find((props: any) => props.autoFocus);
     renameInput.onKeyDown({ key: "Enter" });

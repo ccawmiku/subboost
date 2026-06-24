@@ -257,7 +257,7 @@ export function ProxyGroupsModuleCard({
         }}
         title={hasExpandedContent ? (isRulesExpanded ? "收起" : "展开") : undefined}
       >
-        {hasExpandedContent ? (
+        {!isEditing && (hasExpandedContent ? (
           isRulesExpanded ? (
             <ChevronDown className="h-4 w-4 shrink-0 text-white/50" />
           ) : (
@@ -265,23 +265,18 @@ export function ProxyGroupsModuleCard({
           )
         ) : (
           <span className="h-4 w-4 shrink-0" />
-        )}
-        <div className="min-w-0">
+        ))}
+        <div className={cn("min-w-0", isEditing && "col-span-3")}>
           {isEditing ? (
             <div
-              className={cn(
-                "min-w-0 items-center gap-1",
-                onChangeEditingDescription
-                  ? "flex flex-wrap"
-                  : "flex",
-              )}
+              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
               <div
                 className={cn(
                   "min-w-0",
                   onChangeEditingDescription
-                    ? "grid min-w-0 flex-[1_1_28rem] grid-cols-[minmax(0,1fr)_minmax(0,1.42fr)] gap-1"
+                    ? "grid grid-cols-[minmax(5.75rem,1fr)_minmax(0,1.42fr)] gap-1"
                     : "flex-1",
                 )}
               >
@@ -309,10 +304,24 @@ export function ProxyGroupsModuleCard({
                   />
                 )}
               </div>
-              <Button variant="ghost" size="sm" onClick={onCommitEditing} className="h-7 px-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCommitEditing}
+                className="h-7 px-2"
+                title="保存"
+                aria-label="保存"
+              >
                 <Check className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={onCancelEditing} className="h-7 px-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancelEditing}
+                className="h-7 px-2"
+                title="取消"
+                aria-label="取消"
+              >
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
