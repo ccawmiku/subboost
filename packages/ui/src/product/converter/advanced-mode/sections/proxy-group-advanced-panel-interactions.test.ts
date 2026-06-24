@@ -79,8 +79,10 @@ function node(name: string): ParsedNode {
   } as ParsedNode;
 }
 
-function flattenElements(value: React.ReactNode): React.ReactElement[] {
-  const out: React.ReactElement[] = [];
+type TestElement = React.ReactElement<Record<string, any>>;
+
+function flattenElements(value: React.ReactNode): TestElement[] {
+  const out: TestElement[] = [];
   const visit = (item: React.ReactNode): void => {
     if (Array.isArray(item)) {
       item.forEach(visit);
@@ -91,7 +93,7 @@ function flattenElements(value: React.ReactNode): React.ReactElement[] {
       visit((item.type as (props: unknown) => React.ReactNode)(item.props));
       return;
     }
-    out.push(item);
+    out.push(item as TestElement);
     visit((item.props as { children?: React.ReactNode }).children);
   };
   visit(value);

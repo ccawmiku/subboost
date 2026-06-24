@@ -572,7 +572,7 @@ describe("ProxyGroupsRulesLibrary", () => {
     expect(renderLibrary().html).toContain("域名");
 
     vi.clearAllMocks();
-    mocks.interactions = {};
+    mocks.interactions = { ruleAdded: vi.fn() };
     mocks.store.customRuleSets = [];
     mocks.search.searchResults = [telegramRule];
     renderLibrary({ 0: [telegramRule], 1: "custom:custom-1" });

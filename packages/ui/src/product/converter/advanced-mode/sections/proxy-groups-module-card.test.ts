@@ -73,6 +73,8 @@ vi.mock("./proxy-groups-module-rules-panel", () => ({
 
 import { ProxyGroupsModuleCard } from "./proxy-groups-module-card";
 
+type ModuleCardProps = React.ComponentProps<typeof ProxyGroupsModuleCard>;
+
 const baseModule: ProxyGroupModule = {
   id: "gemini",
   name: "Gemini",
@@ -86,7 +88,7 @@ const baseModule: ProxyGroupModule = {
   ],
 };
 
-function props(overrides: Record<string, unknown> = {}) {
+function props(overrides: Partial<ModuleCardProps> = {}): ModuleCardProps {
   return {
     module: baseModule,
     display: { full: "Gemini Display" },
@@ -183,10 +185,11 @@ describe("ProxyGroupsModuleCard", () => {
   });
 
   it("handles optional description editing and advanced rule rendering", () => {
+    const onChangeEditingDescription = vi.fn();
     const editingHandlers = props({
       isEditing: true,
       editingDescription: "Draft description",
-      onChangeEditingDescription: vi.fn(),
+      onChangeEditingDescription,
       isRulesExpanded: false,
     });
     renderToStaticMarkup(React.createElement(ProxyGroupsModuleCard, editingHandlers));
@@ -200,16 +203,15 @@ describe("ProxyGroupsModuleCard", () => {
     descriptionInput.onChange({ target: { value: "Updated description" } });
     descriptionInput.onKeyDown({ key: "Enter" });
     descriptionInput.onKeyDown({ key: "Escape" });
-    expect(editingHandlers.onChangeEditingDescription).toHaveBeenCalledWith(
-      "Updated description",
-    );
+    expect(onChangeEditingDescription).toHaveBeenCalledWith("Updated description");
     expect(editingHandlers.onCommitEditing).toHaveBeenCalled();
     expect(editingHandlers.onCancelEditing).toHaveBeenCalled();
 
     mocks.inputs = [];
+    const onChangeEmptyDescription = vi.fn();
     const emptyDescriptionHandlers = props({
       isEditing: true,
-      onChangeEditingDescription: vi.fn(),
+      onChangeEditingDescription: onChangeEmptyDescription,
       isRulesExpanded: false,
     });
     renderToStaticMarkup(
@@ -284,7 +286,7 @@ describe("ProxyGroupsModuleCard", () => {
         ProxyGroupsModuleCard,
         props({
           description: "Override description",
-          module: { ...baseModule, description: undefined },
+          module: { ...baseModule, description: undefined as never },
           display: { full: "Override" },
         })
       )
@@ -297,7 +299,7 @@ describe("ProxyGroupsModuleCard", () => {
         props({
           extraRules: [],
           manualRules: [],
-          module: { ...baseModule, description: undefined, rules: [] },
+          module: { ...baseModule, description: undefined as never, rules: [] },
           rulesContentOverride: null,
           rulesCountOverride: 0,
         })

@@ -470,7 +470,7 @@ describe("generateClashConfig", () => {
           alterId: 0,
           cipher: "auto",
           "client-fingerprint": 1,
-        } as ParsedNode,
+        } as unknown as ParsedNode,
         {
           name: "VLESS TCP",
           type: "vless",
