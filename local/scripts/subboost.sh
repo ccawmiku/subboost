@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 DEFAULT_HOME="/opt/subboost"
+DEFAULT_STABLE_RELEASE_URL="https://github.com/SubBoost/subboost/releases/latest/download/release.json"
 SUBBOOST_HOME="${SUBBOOST_HOME:-$DEFAULT_HOME}"
 ENV_FILE="$SUBBOOST_HOME/.env"
 COMPOSE_FILE="$SUBBOOST_HOME/docker-compose.yml"
@@ -136,6 +137,20 @@ write_runtime_env_value() {
   local value="$2"
   write_env_value "$key" "$value"
   export "$key=$value"
+}
+
+is_official_fixed_release_url() {
+  case "$1" in
+    https://github.com/SubBoost/subboost/releases/download/v[0-9]*.[0-9]*.[0-9]*/release.json) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+migrate_update_release_url() {
+  local release_url="$1"
+  is_official_fixed_release_url "$release_url" || return 1
+  say "Detected old fixed release update source; switching updates to stable latest."
+  write_runtime_env_value SUBBOOST_RELEASE_URL "$DEFAULT_STABLE_RELEASE_URL"
 }
 
 install_file_from_url() {
@@ -281,6 +296,9 @@ update_cmd() {
   local release_file="$TMP_DIR/release.json"
   local image compose_url manager_url
   mkdir -p "$TMP_DIR"
+  if migrate_update_release_url "$release_url"; then
+    release_url="$DEFAULT_STABLE_RELEASE_URL"
+  fi
   if [ -n "$release_url" ] && download_to_temp "$release_url" "$release_file" 2>/dev/null; then
     image="$(json_get image "$release_file" || true)"
     compose_url="$(resolve_url "$release_url" "$(json_get composeUrl "$release_file" || true)")"

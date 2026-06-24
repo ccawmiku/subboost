@@ -363,6 +363,95 @@ ENV
     expect(result.stdout).toContain("SUBBOOST_MANAGER_URL=file://");
   }, 10_000);
 
+  it("migrates old fixed official update sources to stable latest", () => {
+    const script = `
+      set -Eeuo pipefail
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      mkdir -p "$home/bin"
+      cat > "$home/.env" <<'ENV'
+SUBBOOST_RELEASE_URL=https://github.com/SubBoost/subboost/releases/download/v2.4.0/release.json
+SUBBOOST_IMAGE=old-image
+POSTGRES_DB=subboost
+POSTGRES_USER=subboost
+POSTGRES_PASSWORD=password
+DATABASE_URL=postgresql://subboost:password@db:5432/subboost?schema=public
+ENCRYPTION_KEY=key
+JWT_SECRET=jwt
+CRON_SECRET=cron
+APP_URL=http://127.0.0.1:31000
+SUBBOOST_PORT=31000
+ENV
+      : > "$home/docker-compose.yml"
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      export SUBBOOST_HOME="$home"
+      export SUBBOOST_BIN="$home/bin/subboost"
+      export SUBBOOST_DOCTOR_HEALTH_ATTEMPTS=1
+      export SUBBOOST_DOCTOR_HEALTH_INTERVAL_SECONDS=0
+      source local/scripts/subboost.sh
+      sudo_do() { "$@"; }
+      install_secret_file() { cp "$1" "$2"; }
+      read_env_file() { cat "$ENV_FILE"; }
+      download_log="$home/download-log"
+      : > "$download_log"
+      download_to_temp() {
+        printf '%s\\n' "$1" >> "$download_log"
+        case "$1" in
+          *release.json)
+            cat > "$2" <<'JSON'
+{"image":"new-image","composeUrl":"docker-compose.image.yml","managerUrl":"subboost-manager"}
+JSON
+            ;;
+          *)
+            printf 'asset\\n' > "$2"
+            ;;
+        esac
+      }
+      docker_log="$home/docker-log"
+      : > "$docker_log"
+      docker() {
+        if [ "$1" = "info" ]; then return 0; fi
+        if [ "$1" = "compose" ]; then
+          case "$*" in
+            "compose version"*) return 0 ;;
+            *" config") return 0 ;;
+            *" pull")
+              printf 'pull_image=%s\\n' "\${SUBBOOST_IMAGE:-}" >> "$docker_log"
+              return 0
+              ;;
+            *" up -d --remove-orphans") return 0 ;;
+            *" up -d --no-deps --force-recreate app") return 0 ;;
+            *" ps -q app") printf 'app-id\\n'; return 0 ;;
+            *" ps -q db") printf 'db-id\\n'; return 0 ;;
+            *" ps -q cron") printf 'cron-id\\n'; return 0 ;;
+          esac
+        fi
+        if [ "$1" = "inspect" ]; then
+          case "$*" in
+            *".State.Status"*) printf 'running\\n'; return 0 ;;
+            *".State.Health"*) printf 'healthy\\n'; return 0 ;;
+          esac
+        fi
+        return 0
+      }
+      curl() { return 0; }
+      update_cmd
+      cat "$download_log"
+      cat "$docker_log"
+      cat "$home/.env"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Detected old fixed release update source");
+    expect(result.stdout).toContain("https://github.com/SubBoost/subboost/releases/latest/download/release.json");
+    expect(result.stdout).toContain("pull_image=new-image");
+    expect(result.stdout).toContain(
+      "SUBBOOST_RELEASE_URL=https://github.com/SubBoost/subboost/releases/latest/download/release.json"
+    );
+  }, 10_000);
+
   it("updates exact env keys without removing similarly prefixed names", () => {
     const script = `
       set -Eeuo pipefail
