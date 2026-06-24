@@ -468,7 +468,7 @@ describe("rule generator", () => {
         {
           id: "custom-set",
           name: "Custom Set",
-          behavior: "classical",
+          behavior: "classical" as never,
           path: "https://rules.example.com/custom.yaml",
           target: { kind: "custom", id: "regional" },
           noResolve: true,
@@ -504,7 +504,7 @@ describe("rule generator", () => {
         {
           id: "custom-set",
           name: "Custom Set",
-          behavior: "classical",
+          behavior: "classical" as never,
           path: "https://rules.example.com/custom.yaml",
           target: { kind: "custom", id: "regional" },
           noResolve: true,
