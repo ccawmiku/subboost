@@ -227,7 +227,13 @@ export function Footer({
 
         <div className="mt-8 border-t border-white/5 pt-6">
           <p className="text-center text-xs text-white/40">
-            Powered by SubBoost{buildVersion ? ` | v ${buildVersion}` : ""}
+            {mode === "local" ? (
+              <>
+                SubBoost CF Personal（非官方） · <a href={sourceRepositoryUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/70">基于 SubBoost</a> · <a href={repositoryUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/70">源码与许可证</a>
+              </>
+            ) : (
+              <>Powered by SubBoost{buildVersion ? ` | v ${buildVersion}` : ""}</>
+            )}
           </p>
         </div>
       </div>

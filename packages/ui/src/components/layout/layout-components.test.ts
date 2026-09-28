@@ -115,7 +115,10 @@ describe("shared layout components", () => {
     expect(html).toContain("docs/CLOUDFLARE_DEPLOY.md");
     expect(html).not.toContain("本地管理员入口");
     expect(html).not.toContain("我的订阅");
-    expect(html).toContain("Powered by SubBoost | v 2.3.17");
+    expect(html).toContain("SubBoost CF Personal（非官方）");
+    expect(html).toContain("基于 SubBoost");
+    expect(html).toContain("源码与许可证");
+    expect(html).not.toContain("Powered by SubBoost");
 
     mocks.userState = { user: { id: "user-1" } };
     html = renderToStaticMarkup(
