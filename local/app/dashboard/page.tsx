@@ -38,8 +38,16 @@ const localDashboardAdapter: DashboardSurfaceAdapter = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
-    const data = await readJsonResponse<RefreshSubscriptionResponse>(response, "刷新失败");
-    return data;
+    const data = await readJsonResponse<RefreshSubscriptionResponse & { jobId?: string }>(response, "刷新失败");
+    if (response.status !== 202 || !data.jobId) return data;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const poll = await fetch(`/api/subscriptions/${encodeURIComponent(id)}/refresh?jobId=${encodeURIComponent(data.jobId)}`);
+      const job = await readJsonResponse<{ status: "pending" | "done" | "error"; result?: RefreshSubscriptionResponse; error?: string }>(poll, "查询刷新状态失败");
+      if (job.status === "done") return job.result ?? {};
+      if (job.status === "error") throw new Error(job.error || "刷新失败");
+    }
+    return { queued: true };
   },
   updateSubscriptionSettings: async (id, payload) => {
     const response = await fetch(`/api/subscriptions/${encodeURIComponent(id)}`, {

@@ -1,0 +1,601 @@
+proxies:
+  - name: Cloudflare-import-001
+    type: ss
+    server: example.com
+    port: 8301
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-002
+    type: ss
+    server: example.com
+    port: 8302
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-003
+    type: ss
+    server: example.com
+    port: 8303
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-004
+    type: ss
+    server: example.com
+    port: 8304
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-005
+    type: ss
+    server: example.com
+    port: 8305
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-006
+    type: ss
+    server: example.com
+    port: 8306
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-007
+    type: ss
+    server: example.com
+    port: 8307
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-008
+    type: ss
+    server: example.com
+    port: 8308
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-009
+    type: ss
+    server: example.com
+    port: 8309
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-010
+    type: ss
+    server: example.com
+    port: 8310
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-011
+    type: ss
+    server: example.com
+    port: 8311
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-012
+    type: ss
+    server: example.com
+    port: 8312
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-013
+    type: ss
+    server: example.com
+    port: 8313
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-014
+    type: ss
+    server: example.com
+    port: 8314
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-015
+    type: ss
+    server: example.com
+    port: 8315
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-016
+    type: ss
+    server: example.com
+    port: 8316
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-017
+    type: ss
+    server: example.com
+    port: 8317
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-018
+    type: ss
+    server: example.com
+    port: 8318
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-019
+    type: ss
+    server: example.com
+    port: 8319
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-020
+    type: ss
+    server: example.com
+    port: 8320
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-021
+    type: ss
+    server: example.com
+    port: 8321
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-022
+    type: ss
+    server: example.com
+    port: 8322
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-023
+    type: ss
+    server: example.com
+    port: 8323
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-024
+    type: ss
+    server: example.com
+    port: 8324
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-025
+    type: ss
+    server: example.com
+    port: 8325
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-026
+    type: ss
+    server: example.com
+    port: 8326
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-027
+    type: ss
+    server: example.com
+    port: 8327
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-028
+    type: ss
+    server: example.com
+    port: 8328
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-029
+    type: ss
+    server: example.com
+    port: 8329
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-030
+    type: ss
+    server: example.com
+    port: 8330
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-031
+    type: ss
+    server: example.com
+    port: 8331
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-032
+    type: ss
+    server: example.com
+    port: 8332
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-033
+    type: ss
+    server: example.com
+    port: 8333
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-034
+    type: ss
+    server: example.com
+    port: 8334
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-035
+    type: ss
+    server: example.com
+    port: 8335
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-036
+    type: ss
+    server: example.com
+    port: 8336
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-037
+    type: ss
+    server: example.com
+    port: 8337
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-038
+    type: ss
+    server: example.com
+    port: 8338
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-039
+    type: ss
+    server: example.com
+    port: 8339
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-040
+    type: ss
+    server: example.com
+    port: 8340
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-041
+    type: ss
+    server: example.com
+    port: 8341
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-042
+    type: ss
+    server: example.com
+    port: 8342
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-043
+    type: ss
+    server: example.com
+    port: 8343
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-044
+    type: ss
+    server: example.com
+    port: 8344
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-045
+    type: ss
+    server: example.com
+    port: 8345
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-046
+    type: ss
+    server: example.com
+    port: 8346
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-047
+    type: ss
+    server: example.com
+    port: 8347
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-048
+    type: ss
+    server: example.com
+    port: 8348
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-049
+    type: ss
+    server: example.com
+    port: 8349
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-050
+    type: ss
+    server: example.com
+    port: 8350
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-051
+    type: ss
+    server: example.com
+    port: 8351
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-052
+    type: ss
+    server: example.com
+    port: 8352
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-053
+    type: ss
+    server: example.com
+    port: 8353
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-054
+    type: ss
+    server: example.com
+    port: 8354
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-055
+    type: ss
+    server: example.com
+    port: 8355
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-056
+    type: ss
+    server: example.com
+    port: 8356
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-057
+    type: ss
+    server: example.com
+    port: 8357
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-058
+    type: ss
+    server: example.com
+    port: 8358
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-059
+    type: ss
+    server: example.com
+    port: 8359
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-060
+    type: ss
+    server: example.com
+    port: 8360
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-061
+    type: ss
+    server: example.com
+    port: 8361
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-062
+    type: ss
+    server: example.com
+    port: 8362
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-063
+    type: ss
+    server: example.com
+    port: 8363
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-064
+    type: ss
+    server: example.com
+    port: 8364
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-065
+    type: ss
+    server: example.com
+    port: 8365
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-066
+    type: ss
+    server: example.com
+    port: 8366
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-067
+    type: ss
+    server: example.com
+    port: 8367
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-068
+    type: ss
+    server: example.com
+    port: 8368
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-069
+    type: ss
+    server: example.com
+    port: 8369
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-070
+    type: ss
+    server: example.com
+    port: 8370
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-071
+    type: ss
+    server: example.com
+    port: 8371
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-072
+    type: ss
+    server: example.com
+    port: 8372
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-073
+    type: ss
+    server: example.com
+    port: 8373
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-074
+    type: ss
+    server: example.com
+    port: 8374
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-075
+    type: ss
+    server: example.com
+    port: 8375
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-076
+    type: ss
+    server: example.com
+    port: 8376
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-077
+    type: ss
+    server: example.com
+    port: 8377
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-078
+    type: ss
+    server: example.com
+    port: 8378
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-079
+    type: ss
+    server: example.com
+    port: 8379
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-080
+    type: ss
+    server: example.com
+    port: 8380
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-081
+    type: ss
+    server: example.com
+    port: 8381
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-082
+    type: ss
+    server: example.com
+    port: 8382
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-083
+    type: ss
+    server: example.com
+    port: 8383
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-084
+    type: ss
+    server: example.com
+    port: 8384
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-085
+    type: ss
+    server: example.com
+    port: 8385
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-086
+    type: ss
+    server: example.com
+    port: 8386
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-087
+    type: ss
+    server: example.com
+    port: 8387
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-088
+    type: ss
+    server: example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-089
+    type: ss
+    server: example.com
+    port: 8389
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-090
+    type: ss
+    server: example.com
+    port: 8390
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-091
+    type: ss
+    server: example.com
+    port: 8391
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-092
+    type: ss
+    server: example.com
+    port: 8392
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-093
+    type: ss
+    server: example.com
+    port: 8393
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-094
+    type: ss
+    server: example.com
+    port: 8394
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-095
+    type: ss
+    server: example.com
+    port: 8395
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-096
+    type: ss
+    server: example.com
+    port: 8396
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-097
+    type: ss
+    server: example.com
+    port: 8397
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-098
+    type: ss
+    server: example.com
+    port: 8398
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-099
+    type: ss
+    server: example.com
+    port: 8399
+    cipher: aes-128-gcm
+    password: test-only
+  - name: Cloudflare-import-100
+    type: ss
+    server: example.com
+    port: 8400
+    cipher: aes-128-gcm
+    password: test-only

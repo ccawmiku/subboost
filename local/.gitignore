@@ -1,0 +1,15 @@
+/dist/
+.vinext/
+.wrangler/
+cloudflare-build.log
+cloudflare-deploy.log
+cloudflare-secrets.log
+.dev.vars
+.staging-secrets
+.staging-admin
+.dev.vars.deploy-hidden
+.production-secrets
+.production-admin
+backups/
+wrangler.production.jsonc
+wrangler.staging.jsonc

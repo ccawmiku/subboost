@@ -29,6 +29,8 @@ import {
 } from "./subscription-service";
 import { LOCAL_AUTO_UPDATE_MIN_SECONDS } from "./auto-update-policy";
 import { JobLeaseLostError } from "./job-lease";
+import { scheduleSubscriptionYaml } from "./yaml-jobs";
+import { compareAndSetSubscriptionWithState } from "./subscription-atomic";
 
 type AutoUpdateSubscriptionRow = SubscriptionRow & {
   owner: {
@@ -63,18 +65,12 @@ async function writeAutoUpdateState(
   assertLease?: () => Promise<void>
 ): Promise<boolean> {
   await assertLease?.();
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.subscription.updateMany({
-      where: { id: subscriptionId, updatedAt: expectedUpdatedAt },
-      data: { ...extraSubscriptionData, updatedAt: new Date() },
-    });
-    if (updated.count !== 1) return false;
-    await tx.subscriptionAutoUpdateState.upsert({
-      where: { subscriptionId },
-      create: { subscriptionId, ...state },
-      update: state,
-    });
-    return true;
+  return compareAndSetSubscriptionWithState({
+    subscriptionId,
+    expectedUpdatedAt,
+    subscriptionData: { ...extraSubscriptionData, updatedAt: new Date() },
+    stateCreate: state,
+    stateUpdate: state,
   });
 }
 
@@ -203,6 +199,7 @@ async function completeSuccess(params: {
   );
   if (!persisted) return staleOutcome(params.prepared.requestedHosts);
 
+  await scheduleSubscriptionYaml(params.subscription.token);
   console.info("[local-subscription-cron] updated", {
     subscriptionId: params.subscription.id,
     nodeCount: refreshResult.nodeCount,
@@ -292,18 +289,12 @@ async function recordUnexpectedFailure(params: {
   return completion.outcome;
 }
 
-export async function runLocalSubscriptionAutoUpdateCron(
-  now = new Date(),
-  options: { assertLease?: () => Promise<void> } = {}
-): Promise<FinalCronUpdateSummary> {
-  await options.assertLease?.();
-  const subscriptions = (await prisma.subscription.findMany({
-    where: { autoUpdateInterval: { not: null } },
-    include: { owner: { select: { username: true } }, autoUpdateState: true },
-  })) as AutoUpdateSubscriptionRow[];
-
-  const accumulator = createCronUpdateAccumulator(subscriptions.length);
-  for (const subscription of subscriptions) {
+async function updateOneSubscription(
+  subscription: AutoUpdateSubscriptionRow,
+  accumulator: ReturnType<typeof createCronUpdateAccumulator>,
+  now: Date,
+  options: { assertLease?: () => Promise<void> }
+): Promise<void> {
     await options.assertLease?.();
     let requestedHosts: string[] = [];
     let attemptStartedAt: Date | null = null;
@@ -323,7 +314,7 @@ export async function runLocalSubscriptionAutoUpdateCron(
 
       if (!scheduleState.due) {
         recordCronUpdateSkipped(accumulator);
-        continue;
+        return;
       }
 
       attemptStartedAt = new Date();
@@ -352,6 +343,35 @@ export async function runLocalSubscriptionAutoUpdateCron(
         })
       );
     }
+}
+
+export async function runLocalSubscriptionAutoUpdateOne(
+  id: string,
+  now = new Date()
+): Promise<FinalCronUpdateSummary | null> {
+  const subscription = (await prisma.subscription.findUnique({
+    where: { id },
+    include: { owner: { select: { username: true } }, autoUpdateState: true },
+  })) as AutoUpdateSubscriptionRow | null;
+  if (!subscription || subscription.autoUpdateInterval === null) return null;
+  const accumulator = createCronUpdateAccumulator(1);
+  await updateOneSubscription(subscription, accumulator, now, {});
+  return finalizeCronUpdateSummary(accumulator, { maxTopHosts: 50, maxTopUsers: 50 });
+}
+
+export async function runLocalSubscriptionAutoUpdateCron(
+  now = new Date(),
+  options: { assertLease?: () => Promise<void> } = {}
+): Promise<FinalCronUpdateSummary> {
+  await options.assertLease?.();
+  const subscriptions = (await prisma.subscription.findMany({
+    where: { autoUpdateInterval: { not: null } },
+    include: { owner: { select: { username: true } }, autoUpdateState: true },
+  })) as AutoUpdateSubscriptionRow[];
+
+  const accumulator = createCronUpdateAccumulator(subscriptions.length);
+  for (const subscription of subscriptions) {
+    await updateOneSubscription(subscription, accumulator, now, options);
   }
 
   await options.assertLease?.();

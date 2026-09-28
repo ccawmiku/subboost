@@ -19,7 +19,11 @@
     "prebuild": "node scripts/ensure-root-node-modules.cjs && npm run clean",
     "build": "npm run db:generate && next build --webpack",
     "start": "node scripts/start-standalone.cjs",
-    "check": "npm run lint && npm run typecheck && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run build",
+    "dev:vinext": "vinext dev --port 3001",
+    "build:vinext": "vinext build",
+    "start:vinext": "wrangler dev --config dist/server/wrangler.json",
+    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.0",
@@ -39,6 +43,7 @@
     "@subboost/core": "file:../packages/core",
     "@subboost/server-core": "file:../packages/server-core",
     "@subboost/ui": "file:../packages/ui",
+    "@vinext/cloudflare": "^1.0.0-beta.10",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
@@ -49,22 +54,29 @@
     "next": "^16.3.4",
     "peggy": "^5.1.0",
     "prisma": "^7.9.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "react-remove-scroll-bar": "^2.3.8",
+    "react-server-dom-webpack": "^19.3.0",
     "tailwind-merge": "^3.6.0",
+    "vinext": "^1.0.0-beta.12",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.60.2",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.19.19",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-rsc": "^0.5.35",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.12",
     "postcss": "8.5.23",
     "tailwindcss": "^4.3.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vite": "^8.3.1",
+    "wrangler": "^4.141.0"
   }
 }

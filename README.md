@@ -1,85 +1,37 @@
-<!-- markdownlint-disable MD033 MD041 -->
-<div align="center">
-  <p><img src="docs/assets/logo.png" alt="SubBoost" width="96"></p>
-  <h1>SubBoost</h1>
-  <p>
-    <img src="https://img.shields.io/badge/platform-Linux%20%2B%20Docker-lightgrey.svg" alt="Platform: Linux + Docker">
-    <img src="https://img.shields.io/badge/version-2.8.1-green.svg" alt="Version 2.8.1">
-    <a href="https://subboost.org"><img src="https://img.shields.io/badge/app-subboost.org-brightgreen.svg" alt="Online app"></a>
-    <a href="https://docs.subboost.org"><img src="https://img.shields.io/badge/docs-subboost.org-blue.svg" alt="Documentation"></a>
-    <img src="https://img.shields.io/badge/image-GHCR-blue.svg" alt="GHCR image">
-  </p>
-  <p><strong><a href="README.md">English</a> | <a href="README-CN.md">中文</a></strong></p>
-</div>
-<!-- markdownlint-enable MD033 MD041 -->
+# SubBoost CF Personal
 
-**SubBoost** is a **Clash/Mihomo subscription conversion, enhancement, and management** tool. It can convert airport subscriptions and self-hosted nodes into optimized aggregate subscriptions, then update them automatically. With the visual UI, you can configure advanced features such as **chained proxies, precise routing, DNS leak prevention, and multi-subscription aggregation** in one click.
+[中文](README-CN.md) · [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOY.en.md) · [License](LICENSE) · [Modification notice](NOTICE.md)
 
-## Highlights & Use Cases
+This is an **unofficial Cloudflare edition** of [SubBoost](https://github.com/SubBoost/subboost). It runs the subscription conversion and management UI on Workers, D1, and Queues. Deploy your own instance and create your own administrator. This repository does not include a shared account, database, or subscription service.
 
-- **Subscription conversion**: Import subscription links, YAML files, node links, and other common formats.
-- **Node management**: Rename, delete, or configure listening ports for nodes in batches.
-- **Node filtering**: Build `filtered proxy groups` with only selected nodes by source, region, and custom rules.
-- **Chained proxies**: Configure chained proxies and `relay proxy groups` visually in one click.
-- **Precise routing**: Enable more than 30 common proxy groups and over 2,000 remote rule sets.
-- **Rule management**: Reorder rules for deeper customization by advanced users.
-- **DNS leak prevention**: The default `basic and DNS configuration` helps prevent DNS leaks.
-- **Automatic refresh**: Refresh subscriptions on a schedule and intelligently match nodes during refresh.
+## What it does
 
-## Interface Preview
+- Imports subscription URLs, YAML, and node links to create Clash/Mihomo configurations.
+- Manages proxy groups, rules, DNS, chained proxies, and multiple sources through a visual UI.
+- Runs as a single-administrator Cloudflare instance, with at most 100 nodes per subscription, 20 subscriptions per instance, and 10 sources per subscription.
+- Uses a Queue for source previews, subscription refreshes, and YAML generation. Whether Cloudflare's free allowance is sufficient depends on current limits and your workload.
 
-<p align="center">
-  <img src="docs/assets/screenshot-main.png" alt="SubBoost visual configuration interface" width="960">
-</p>
+**Get started:** follow the [Cloudflare deployment guide](docs/CLOUDFLARE_DEPLOY.en.md) to create your Worker, D1 database, Queue, and secrets. It also covers administrator setup, updates, backups, and common 403 errors. See the [runtime overview](local/cloudflare/README.md) for component roles.
 
-## Usage & Deployment
+## Relationship to upstream
 
-- Online entry: [No deployment required - direct access to the public service](https://subboost.org)
-- Deployment docs: [One-click deployment - pulls an image to build, faster with lower requirements](https://docs.subboost.org/deploy/one-click)
-- Deployment docs: [Advanced deployment - compiles from source, slower with higher requirements](https://docs.subboost.org/deploy/advanced)
-- Configuration guide: [Clash configuration simple enough for a paramecium: configure precise routing and chained proxies from the UI in one click](https://ryanvan.com/t/topic/59?u=ryan)
+The original Next.js/PostgreSQL self-hosted code remains in the repository, but the primary distribution here is the Cloudflare personal edition. Upstream Docker images, the upstream online service, and upstream releases are separate from this edition. For upstream features and support, visit [SubBoost/subboost](https://github.com/SubBoost/subboost). See [NOTICE.md](NOTICE.md) for origin and change notices.
 
-## Development Notes
+## Development
 
-Developers can start a local development environment from source:
+Use a Node.js version supported by `package.json`. From the repository root:
 
-```bash
+```powershell
 npm ci
-npm run dev
-```
-
-Common checks:
-
-```bash
 npm run lint
 npm run test:unit
-npm run check:local-app
+npm run local:typecheck
 ```
 
-## Links
+Build for Cloudflare with `npm --prefix local run build:vinext`. Never commit local deployment configuration, Worker secrets, database backups, or real subscription links. The public configuration template is [wrangler.example.jsonc](local/wrangler.example.jsonc). See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for contribution guidance.
 
-- Online entry: [https://subboost.org](https://subboost.org)
-- Deployment docs: [https://docs.subboost.org](https://docs.subboost.org)
-- Release announcements: [docs/release-notes.md](./docs/release-notes.md)
-- Changelog: [https://subboost.org/faq](https://subboost.org/faq)
-- Community feedback: [LINUX DO](https://linux.do/) & [IDC Flare](https://idcflare.com/); thanks to everyone in the forums for the active discussion and feedback.
+## License and source
 
-## Star History
+This edition retains the upstream [GNU AGPL-3.0-only](LICENSE) license and notices, and marks its modifications. If you operate a further modified version over a network, offer the corresponding source for the **version actually running**. The UI links to this fork's source by default. Point `NEXT_PUBLIC_SOURCE_REPOSITORY_URL` to your public corresponding source repository when deploying your own modifications. See the [modification notice](NOTICE.md) and [third-party notices](docs/THIRD_PARTY_NOTICES.md).
 
-<a href="https://www.star-history.com/?repos=subboost%2Fsubboost&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=subboost/subboost&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=subboost/subboost&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=subboost/subboost&type=date&legend=top-left" />
- </picture>
-</a>
-
-## License
-
-The public SubBoost source code is licensed under the [GNU Affero General Public License v3.0 only](./LICENSE).
-
-If you modify SubBoost and provide it to users over a network, AGPL-3.0 requires you to offer those users the corresponding source code. The public source entry is [SubBoost/subboost](https://github.com/SubBoost/subboost).
-
-## Disclaimer
-
-This project does not provide any proxy service and makes no guarantee about the availability or legality of third-party subscription content.
+This project provides no proxy nodes or subscription service and does not guarantee the availability or legality of third-party subscriptions.

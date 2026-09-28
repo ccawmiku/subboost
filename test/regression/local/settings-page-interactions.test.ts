@@ -224,9 +224,10 @@ describe("local source-import settings interactions", () => {
       subscriptionCount: 1,
       quota: { maxSubscriptions: 9 },
     };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response({ allowUnsafeSubscriptionSources: false }))
-      .mockResolvedValueOnce(response({ allowUnsafeSubscriptionSources: true }));
+    const fetchMock = vi.fn(async (url: string, options?: RequestInit) =>
+      url === "/api/settings/source-import" && options?.method === "PATCH"
+        ? response({ allowUnsafeSubscriptionSources: true })
+        : response({ allowUnsafeSubscriptionSources: false }));
     vi.stubGlobal("fetch", fetchMock);
 
     const view = renderSettings();
@@ -255,9 +256,10 @@ describe("local source-import settings interactions", () => {
       subscriptionCount: 1,
       quota: { maxSubscriptions: 9 },
     };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response({ allowUnsafeSubscriptionSources: true }))
-      .mockResolvedValueOnce(patchResponse);
+    const fetchMock = vi.fn(async (url: string, options?: RequestInit) =>
+      url === "/api/settings/source-import" && options?.method === "PATCH"
+        ? patchResponse
+        : response({ allowUnsafeSubscriptionSources: true }));
     vi.stubGlobal("fetch", fetchMock);
 
     const view = renderSettings({ 0: true });

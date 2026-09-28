@@ -130,8 +130,8 @@ describe("Header", () => {
 
     const html = renderHeader({ mode: "local", privilegedMenuItem: { href: adminPath, label: "管理" } as any }, true);
 
-    expect(html).toContain("self-host");
-    expect(html).toContain("自部署入口");
+    expect(html).toContain("Cloudflare · 个人版");
+    expect(html).toContain("Cloudflare 个人版");
     expect(html).toContain("我的订阅");
     expect(html).not.toContain("FAQ");
     expect(html).not.toContain("管理");
@@ -151,7 +151,7 @@ describe("Header", () => {
     });
 
     expect(html).toContain("new");
-    expect(html).toContain("self-host");
+    expect(html).toContain("Cloudflare · 个人版");
     expect(html).toContain(`href="${releaseUrl}"`);
     expect(html).toContain('target="_blank"');
 

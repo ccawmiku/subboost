@@ -1,7 +1,7 @@
-import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { apiError, getStringField, jsonBodyError, LOCAL_JSON_BODY_LIMITS, readJsonBody } from "@local/lib/http";
 import { prisma } from "@local/lib/prisma";
+import { authenticateLogin, invalidLoginMessage, singleAdminLogin } from "@local/lib/login-credentials";
 import { sessionCookieOptions, signSession, SESSION_COOKIE } from "@local/lib/session";
 import {
   consumeLocalRateLimit,
@@ -16,7 +16,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 export async function POST(request: Request) {
   const clientKey = getTrustedClientRateLimitKey(request);
   if (clientKey) {
-    const clientLimit = consumeLocalRateLimit("auth-login-client", clientKey, {
+    const clientLimit = await consumeLocalRateLimit("auth-login-client", clientKey, {
       limit: 30,
       windowMs: LOGIN_WINDOW_MS,
     });
@@ -31,23 +31,21 @@ export async function POST(request: Request) {
 
   const username = getStringField(body, "username");
   const password = getStringField(body, "password");
-  const usernameLimitKey = hashLocalRateLimitKey(username.toLowerCase() || "missing");
-  const usernameLimit = consumeLocalRateLimit("auth-login-username", usernameLimitKey, {
+  const totpCode = getStringField(body, "totpCode");
+  const usernameLimitKey = hashLocalRateLimitKey(singleAdminLogin ? "single-admin" : username.toLowerCase() || "missing");
+  const usernameLimit = await consumeLocalRateLimit("auth-login-username", usernameLimitKey, {
     limit: 8,
     windowMs: LOGIN_WINDOW_MS,
   });
   if (!usernameLimit.allowed) {
     return localRateLimitResponse("Too many login attempts. Try again later.", usernameLimit.retryAfterSeconds);
   }
-  const admin = username
-    ? await prisma.localAdmin.findUnique({ where: { username }, select: { id: true, username: true, passwordHash: true } })
-    : null;
-  const valid = admin ? await bcrypt.compare(password, admin.passwordHash) : false;
-  if (!admin || !valid) {
-    return apiError("Invalid username or password.", "UNAUTHORIZED", 401);
+  const admin = await authenticateLogin(username, password, totpCode);
+  if (!admin) {
+    return apiError(invalidLoginMessage, "UNAUTHORIZED", 401);
   }
 
-  resetLocalRateLimit("auth-login-username", usernameLimitKey);
+  await resetLocalRateLimit("auth-login-username", usernameLimitKey);
 
   await prisma.localAdmin.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
   const response = NextResponse.json({ success: true, user: { id: admin.id, username: admin.username } });

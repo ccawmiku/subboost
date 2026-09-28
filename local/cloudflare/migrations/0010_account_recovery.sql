@@ -1,0 +1,2 @@
+ALTER TABLE "LocalAdmin" ADD COLUMN "authVersion" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "LocalAdmin" ADD COLUMN "recoveryCodes" TEXT;

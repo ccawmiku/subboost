@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "subboost-my-instance",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "cloudflare/worker.ts",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "subboost-my-instance",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "queues": {
+    "producers": [{ "binding": "YAML_QUEUE", "queue": "subboost-my-instance-jobs" }],
+    "consumers": [{ "queue": "subboost-my-instance-jobs", "max_batch_size": 1 }]
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
+}

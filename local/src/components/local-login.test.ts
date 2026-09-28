@@ -230,6 +230,23 @@ describe("local login component", () => {
     expect(setters[4]).toHaveBeenLastCalledWith(false);
   });
 
+  it("uses password and TOTP without a username for the Cloudflare personal login", async () => {
+    installWindow();
+    (globalThis as any).fetch = vi.fn(async () => response({ success: true }));
+    const { html } = renderLogin({
+      0: { setupRequired: false, authenticated: false, singleAdminLogin: true, totpEnabled: true },
+      2: "secret",
+      3: "123456",
+    });
+
+    expect(html).not.toContain("管理员账号");
+    expect(html).toContain("动态验证码");
+    await mocks.forms[0].onSubmit({ preventDefault: vi.fn() });
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/auth/login", expect.objectContaining({
+      body: JSON.stringify({ username: "", password: "secret", passwordConfirm: "123456", totpCode: "123456" }),
+    }));
+  });
+
   it("submits setup requests and reports server or load errors", async () => {
     installWindow();
     (globalThis as any).fetch = vi.fn(async () => response({ error: "用户名已存在" }, false));

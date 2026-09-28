@@ -1,6 +1,6 @@
-# Contributing to SubBoost
+# Contributing to SubBoost CF Personal
 
-Thanks for helping improve SubBoost.
+This is an unofficial Cloudflare fork of SubBoost. For upstream changes, contribute directly to [SubBoost/subboost](https://github.com/SubBoost/subboost).
 
 ## Issues and Pull Requests
 
@@ -12,15 +12,13 @@ Thanks for helping improve SubBoost.
 
 ## What Belongs Here
 
-This repository contains the deployable app, shared packages, public documentation, tests, and public release automation.
+This repository contains the Cloudflare edition, shared packages, documentation, and tests.
 
 Do not add secrets, personal configuration, deployment credentials, private keys, real subscription URLs, machine-specific files, or private operational notes.
 
 ## Contributor License Grant
 
-By submitting a pull request, you confirm that you have the right to submit the contribution.
-
-Your contribution is licensed to the public under the repository license, AGPL-3.0-only. In addition, you grant SubBoost maintainers a perpetual, worldwide, non-exclusive, royalty-free, irrevocable, sublicensable license to use, reproduce, modify, distribute, publicly perform, publicly display, and create derivative works from your contribution for proprietary distributions, hosted services, and other SubBoost services.
+By submitting a pull request, you confirm that you have the right to submit it and agree to distribute your contribution under this repository's AGPL-3.0-only license. This fork does not request an additional proprietary license grant.
 
 ## Local Checks
 
@@ -37,5 +35,5 @@ For parser, template, subscription output, or deployment changes, also run the f
 ## Documentation
 
 - Keep README changes bilingual: update `README-CN.md` first, then sync `README.md`.
-- Keep deployment instructions in the documentation site unless the README only needs a short pointer.
+- Keep Cloudflare deployment instructions in `docs/CLOUDFLARE_DEPLOY.md` and link them from the README.
 - Avoid publishing maintainer-only workflow, private infrastructure details, or machine-specific paths.

@@ -60,6 +60,7 @@ type SubscriptionLinkState = {
 };
 
 type Props = {
+  editionLabel?: string;
   showAiColumn: boolean;
   user: User | null;
   authChecked: boolean;
@@ -92,6 +93,7 @@ const DESKTOP_PANEL_MIN_HEIGHT_CLASS = "lg:min-h-[39rem]";
 const DESKTOP_PANEL_CONTENT_MIN_HEIGHT_CLASS = "lg:min-h-[30rem]";
 
 export function HomeLayout({
+  editionLabel,
   showAiColumn,
   user,
   authChecked,
@@ -135,6 +137,7 @@ export function HomeLayout({
 
       {/* Hero */}
       <div className="text-center mb-2 lg:mb-3 [@media(max-height:1000px)]:mb-1.5">
+        {editionLabel && <span className="edition-eyebrow">{editionLabel}</span>}
         <h1 className="font-bold leading-[1.08] mb-1 text-[clamp(1.25rem,2vw,2rem)] [@media(max-height:1000px)]:text-[clamp(1.25rem,1.7vw,1.75rem)]">
           <span className="bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
             SubBoost

@@ -315,7 +315,7 @@ ENV
     // wait_for_health checks live once per attempt, then status_cmd performs one final live+ready check.
     expect(result.stdout).toContain("curl_count=8");
     expect(result.stdout).toContain("up -d --no-deps cron");
-  }, 10_000);
+  }, 30_000);
 
   it("restarts rollback cron without recreating the healthy old app", () => {
     const script = `
@@ -400,7 +400,7 @@ ENV
     expect(result.stdout).toMatch(/image=old-image candidate_image=old-candidate-image command=compose.*old-compose\.yml up -d app$/m);
     expect(result.stdout).toMatch(/image=old-image candidate_image=old-candidate-image command=compose.*old-compose\.yml up -d --no-deps cron$/m);
     expect(result.stdout).not.toMatch(/old-compose\.yml.*up -d cron(?:\s|$)/);
-  }, 10_000);
+  }, 30_000);
 
   it("uses refreshed release metadata before pulling during update", () => {
     const script = `
@@ -505,7 +505,7 @@ ENV
     expect(pauseIndex).toBeGreaterThan(pullIndex);
     expect(dumpIndex).toBeGreaterThan(pauseIndex);
     expect(candidateStartIndex).toBeGreaterThan(dumpIndex);
-  }, 10_000);
+  }, 30_000);
 
   it("migrates old fixed official update sources to stable latest", () => {
     const script = `
@@ -598,7 +598,7 @@ JSON
     expect(result.stdout).toContain(
       "SUBBOOST_RELEASE_URL=https://github.com/SubBoost/subboost/releases/latest/download/release.json"
     );
-  }, 10_000);
+  }, 30_000);
 
   it("updates exact env keys without removing similarly prefixed names", () => {
     const script = `

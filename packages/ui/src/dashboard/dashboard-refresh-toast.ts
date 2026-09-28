@@ -13,6 +13,9 @@ function normalizeCount(value: unknown): number {
 }
 
 export function buildRefreshSubscriptionSuccessToast(data: RefreshSubscriptionResponse): RefreshSubscriptionToast {
+  if (data.queued) {
+    return { title: "刷新已提交，后台仍在处理；稍后查看订阅状态。", variant: "warning" };
+  }
   const refreshableSourceCount = normalizeCount(data.refreshableSourceCount);
   const failedSourceCount = normalizeCount(data.failedSourceCount);
   const refreshedSourceCount =

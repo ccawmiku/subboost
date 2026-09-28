@@ -1,5 +1,5 @@
 import { apiError } from "@local/lib/http";
-import { generateSubscriptionYaml } from "@local/lib/subscription-service";
+import { getSubscriptionYamlForDelivery } from "@local/lib/yaml-delivery";
 import { buildSubscriptionResponseHeaders } from "@subboost/server-core/subscription";
 import {
   consumeLocalRateLimit,
@@ -16,7 +16,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   const { id: token } = await params;
   const clientKey = getTrustedClientRateLimitKey(request);
   if (clientKey) {
-    const clientLimit = consumeLocalRateLimit("subscription-yaml-client", clientKey, {
+    const clientLimit = await consumeLocalRateLimit("subscription-yaml-client", clientKey, {
       limit: 600,
       windowMs: 60_000,
     });
@@ -24,14 +24,19 @@ export async function GET(request: Request, { params }: RouteContext) {
       return localRateLimitResponse("Too many subscription requests. Try again later.", clientLimit.retryAfterSeconds);
     }
   }
-  const tokenLimit = consumeLocalRateLimit("subscription-yaml-token", hashLocalRateLimitKey(token), {
+  const tokenLimit = await consumeLocalRateLimit("subscription-yaml-token", hashLocalRateLimitKey(token), {
     limit: 120,
     windowMs: 60_000,
   });
   if (!tokenLimit.allowed) {
     return localRateLimitResponse("Too many subscription requests. Try again later.", tokenLimit.retryAfterSeconds);
   }
-  const result = await generateSubscriptionYaml(token);
+  const result = await getSubscriptionYamlForDelivery(token);
+  if (result === "pending") {
+    const response = apiError("Subscription YAML is being prepared. Retry shortly.", "PREPARING", 503);
+    response.headers.set("Retry-After", "3");
+    return response;
+  }
   if (!result) return apiError("Subscription YAML not found.", "NOT_FOUND", 404);
   return new Response(result.yaml, {
     headers: buildSubscriptionResponseHeaders(result.name, result.subscriptionInfo, {

@@ -96,19 +96,23 @@ describe("shared layout components", () => {
       })
     );
 
-    expect(html).toContain("self-host");
-    expect(html).toContain("自部署入口");
+    expect(html).toContain("Cloudflare · 个人版");
+    expect(html).toContain("Cloudflare 个人版");
     expect(html).toContain("我的订阅");
     expect(html).not.toContain("FAQ");
     expect(html).toContain("UserMenu:Privileged");
   });
 
   it("renders footer links according to mode and auth state", () => {
-    let html = renderToStaticMarkup(React.createElement(Footer, { mode: "local", buildVersion: "2.3.17" }));
-    expect(html).toContain("开源仓库");
-    expect(html).toContain("https://github.com/SubBoost/subboost");
+    let html = renderToStaticMarkup(React.createElement(Footer, {
+      mode: "local",
+      buildVersion: "2.3.17",
+      sourceRepositoryUrl: "https://github.com/ccawmiku/subboost-cf-personal",
+    }));
+    expect(html).toContain("本版本源码 (AGPL)");
+    expect(html).toContain("https://github.com/ccawmiku/subboost-cf-personal");
     expect(html).toContain("配置教程");
-    expect(html).toContain("https://subboost.org/faq");
+    expect(html).toContain("docs/CLOUDFLARE_DEPLOY.md");
     expect(html).not.toContain("本地管理员入口");
     expect(html).not.toContain("我的订阅");
     expect(html).toContain("Powered by SubBoost | v 2.3.17");

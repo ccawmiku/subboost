@@ -5,8 +5,7 @@ on:
   pull_request:
   push:
     branches:
-      - main
-      - "ryan/**"
+      - cloudflare-free
 
 jobs:
   check:

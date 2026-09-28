@@ -1,0 +1,7 @@
+proxies:
+  - name: Cloudflare-import-smoke
+    type: ss
+    server: example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: test-only

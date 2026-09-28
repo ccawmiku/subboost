@@ -59,12 +59,14 @@ function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function BrandBadge({ badge, tone = "default" }: { badge: HeaderBrandBadge; tone?: "default" | "new" }) {
+function BrandBadge({ badge, tone = "default" }: { badge: HeaderBrandBadge; tone?: "default" | "new" | "cloudflare" }) {
   const className = cn(
     "inline-flex w-fit items-center rounded-full border px-1.5 py-[2px] text-[0.68rem] font-medium leading-none backdrop-blur-sm",
     tone === "new"
       ? "border-emerald-300/30 bg-emerald-400/12 text-emerald-100/90 shadow-[0_0_12px_rgba(52,211,153,0.16)]"
-      : "border-sky-300/25 bg-sky-400/10 text-sky-100/80 shadow-[0_0_12px_rgba(56,189,248,0.16)]"
+      : tone === "cloudflare"
+        ? "cloudflare-badge"
+        : "border-sky-300/25 bg-sky-400/10 text-sky-100/80 shadow-[0_0_12px_rgba(56,189,248,0.16)]"
   );
 
   if (badge.href) {
@@ -120,8 +122,8 @@ export function Header({
   const showPrivilegedLink = mode === "default";
   const visiblePrivilegedItem = showPrivilegedLink && canShowPrivilegedItem ? privilegedMenuItem : null;
   const modeBadge: HeaderBrandBadge = {
-    label: mode === "local" ? "self-host" : "online",
-    title: mode === "local" ? "自部署入口" : "在线入口",
+    label: mode === "local" ? "Cloudflare · 个人版" : "online",
+    title: mode === "local" ? "Cloudflare 个人版" : "在线入口",
   };
 
   return (
@@ -144,7 +146,7 @@ export function Header({
             </Link>
             <span className="hidden flex-col items-start justify-center gap-1 leading-none sm:flex">
               {extraBrandBadge && <BrandBadge badge={extraBrandBadge} tone="new" />}
-              <BrandBadge badge={modeBadge} />
+              <BrandBadge badge={modeBadge} tone={mode === "local" ? "cloudflare" : "default"} />
             </span>
           </div>
 

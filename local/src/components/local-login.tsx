@@ -14,6 +14,8 @@ import { hasAuthConfigHandoff } from "@subboost/ui/store/config-store/auth-hando
 type AuthState = {
   setupRequired: boolean;
   authenticated: boolean;
+  singleAdminLogin?: boolean;
+  totpEnabled?: boolean;
 };
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -79,7 +81,7 @@ export function LocalLogin() {
           "Content-Type": "application/json",
           ...(setupRequired ? { "X-SubBoost-Setup-Token": setupToken } : {}),
         },
-        body: JSON.stringify({ username, password, passwordConfirm }),
+        body: JSON.stringify({ username, password, passwordConfirm, ...(!setupRequired && auth?.singleAdminLogin ? { totpCode: passwordConfirm } : {}) }),
       });
       const data = await readJson<{ error?: string }>(response);
       if (!response.ok) throw new Error(data.error || "登录失败");
@@ -105,10 +107,10 @@ export function LocalLogin() {
           <p className="text-white/50 mt-2">{setupRequired ? "初始化本地管理员账号" : "登录以使用订阅管理功能"}</p>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 space-y-4">
+        <div className="personal-login-card bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 space-y-4">
           {auth ? (
             <form onSubmit={handleSubmit} className="space-y-3">
-              <FormField label="管理员账号">
+              {(!auth.singleAdminLogin || setupRequired) && <FormField label="管理员账号">
                 <Input
                 autoComplete="username"
                 placeholder="管理员账号"
@@ -116,7 +118,7 @@ export function LocalLogin() {
                 onChange={(e) => setUsername(e.target.value)}
                 className="h-12"
                 />
-              </FormField>
+              </FormField>}
               <PasswordField
                 label="密码"
                 autoComplete={setupRequired ? "new-password" : "current-password"}
@@ -141,6 +143,18 @@ export function LocalLogin() {
                   className="h-12"
                 />
               ) : null}
+              {!setupRequired && auth.singleAdminLogin && auth.totpEnabled ? (
+                <FormField label="动态验证码或恢复码">
+                  <Input
+                    autoComplete="one-time-code"
+                    maxLength={16}
+                    placeholder="6 位动态码或恢复码"
+                    value={passwordConfirm}
+                    onChange={(event) => setPasswordConfirm(event.target.value.replace(/[^A-Za-z0-9-]/g, "").slice(0, 16))}
+                    className="h-12"
+                  />
+                </FormField>
+              ) : null}
 
               {error ? (
                 <p className="text-red-400 text-sm" aria-live="polite">
@@ -150,7 +164,7 @@ export function LocalLogin() {
 
               <Button
                 type="submit"
-                disabled={loading || !username || !password || (setupRequired && !passwordConfirm)}
+                disabled={loading || ((!auth.singleAdminLogin || setupRequired) && !username) || !password || (setupRequired && !passwordConfirm) || (!setupRequired && auth.singleAdminLogin && auth.totpEnabled && passwordConfirm.length !== 6 && passwordConfirm.replace(/-/g, "").length !== 12)}
                 className="h-12 w-full"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}

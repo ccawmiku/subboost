@@ -7,6 +7,8 @@ import { Button } from "@subboost/ui/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@subboost/ui/components/ui/card";
 import { SwitchField } from "@subboost/ui/components/ui/switch-field";
 import { useUserStore } from "@subboost/ui/store/user-store";
+import { TotpSettings } from "@local/components/totp-settings";
+import { PasswordSettings } from "@local/components/password-settings";
 
 export default function SettingsPage() {
   const { user, fetchUser, logout } = useUserStore();
@@ -14,10 +16,17 @@ export default function SettingsPage() {
   const [sourceImportLoading, setSourceImportLoading] = React.useState(true);
   const [sourceImportSaving, setSourceImportSaving] = React.useState(false);
   const [sourceImportError, setSourceImportError] = React.useState<string | null>(null);
+  const [usage, setUsage] = React.useState<{ subscriptions: number; subscriptionLimit: number; yamlReady: number; yamlErrors: number; yamlFailures: Array<{ name: string; lastError: string | null; nextRetryAt: string | null }>; pendingImports: number; ruleCacheEntries: number } | null>(null);
 
   React.useEffect(() => {
     void fetchUser();
   }, [fetchUser]);
+
+  React.useEffect(() => {
+    if (!user) return;
+    void fetch("/api/usage", { cache: "no-store" }).then((response) => response.ok ? response.json() : null)
+      .then((result) => setUsage(result)).catch(() => setUsage(null));
+  }, [user]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -92,6 +101,19 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <TotpSettings active={Boolean(user)} />
+        <PasswordSettings active={Boolean(user)} />
+        {usage ? <Card>
+          <CardHeader><CardTitle className="text-base">免费额度观察</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm text-white/70">
+            <p>订阅：{usage.subscriptions} / {usage.subscriptionLimit}</p>
+            <p>YAML 缓存就绪：{usage.yamlReady}；生成失败待重试：{usage.yamlErrors}</p>
+            {usage.yamlFailures.map((failure) => <p key={failure.name} className="text-amber-200">{failure.name}：{failure.lastError || "生成失败"}；下次重试 {failure.nextRetryAt || "待安排"}</p>)}
+            <p>导入排队：{usage.pendingImports}；规则缓存：{usage.ruleCacheEntries}</p>
+            <p className="text-white/50">Cloudflare 每日请求数、Queue 操作数和 D1 读写数请在 Cloudflare 控制台查看。</p>
+            <a className="text-sky-300 underline" href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">打开 Cloudflare 控制台</a>
+          </CardContent>
+        </Card> : null}
         <Card>
           <CardHeader className="flex flex-row items-center gap-3 space-y-0">
             <div className="rounded-lg bg-indigo-500/20 p-2 text-indigo-300">

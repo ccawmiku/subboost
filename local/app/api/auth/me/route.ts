@@ -1,9 +1,11 @@
 import { getCurrentAdmin, isSetupRequired } from "@local/lib/auth";
 import { json } from "@local/lib/http";
 import { prisma } from "@local/lib/prisma";
+import { MAX_NODES_PER_SUBSCRIPTION } from "@local/lib/subscription-service";
+import { authModeFields } from "@local/lib/auth-mode";
 
 export async function GET() {
-  const [setupRequired, admin] = await Promise.all([isSetupRequired(), getCurrentAdmin()]);
+  const [setupRequired, admin, mode] = await Promise.all([isSetupRequired(), getCurrentAdmin(), authModeFields()]);
   const [subscriptionCount, templateCount] = admin
     ? await Promise.all([
         prisma.subscription.count({ where: { ownerId: admin.id } }),
@@ -12,6 +14,7 @@ export async function GET() {
     : [0, 0];
   const now = new Date().toISOString();
   return json({
+    ...mode,
     setupRequired,
     authenticated: Boolean(admin),
     user: admin
@@ -32,10 +35,10 @@ export async function GET() {
           updatedAt: now,
           accounts: [],
           quota: {
-            maxSubscriptions: 9999,
-            maxNodesPerSubscription: 10000,
+            maxSubscriptions: mode.singleAdminLogin ? 20 : 9999,
+            maxNodesPerSubscription: MAX_NODES_PER_SUBSCRIPTION,
             maxCustomTemplates: 9999,
-            maxImportSourcesPerType: 9999,
+            maxImportSourcesPerType: mode.singleAdminLogin ? 10 : 9999,
             canUseSubscriptionLink: true,
           },
           subscriptionCount,

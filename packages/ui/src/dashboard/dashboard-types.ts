@@ -27,6 +27,7 @@ export interface Subscription {
 }
 
 export interface RefreshSubscriptionResponse {
+  queued?: boolean;
   error?: string;
   refreshableSourceCount?: number;
   refreshedSourceCount?: number;

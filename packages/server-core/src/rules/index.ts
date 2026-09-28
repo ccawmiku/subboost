@@ -363,8 +363,9 @@ export function createRuleCatalogService(options: RuleCatalogServiceOptions = {}
     if (indexInflight) return indexInflight;
 
     indexInflight = fetchRemoteRuleIndex()
-      .then((index) => {
+      .then(async (index) => {
         cachedIndex = index;
+        await options.saveIndex?.(index);
         return withSource(index, "remote");
       })
       .finally(() => {
@@ -376,7 +377,10 @@ export function createRuleCatalogService(options: RuleCatalogServiceOptions = {}
 
   async function getRemoteRuleIndex(params: { force?: boolean; allowStale?: boolean; now?: number } = {}) {
     const now = params.now ?? getNow(options);
+    if (!cachedIndex && options.loadIndex) cachedIndex = await options.loadIndex();
     if (!params.force && cachedIndex && isIndexFresh(cachedIndex, now)) return withSource(cachedIndex, "remote");
+    if (!params.force && cachedIndex && options.serveStaleWithoutRefresh && params.allowStale !== false) return withSource(cachedIndex, "stale");
+    if (!params.force && options.serveCachedOnly) throw new RuleIndexUnavailableError();
 
     try {
       return await refreshIndex(params.force ?? false);
@@ -391,6 +395,7 @@ export function createRuleCatalogService(options: RuleCatalogServiceOptions = {}
 
   async function refreshRuleIndex(params: { force?: boolean } = {}): Promise<RuleIndexRefreshResult> {
     const now = getNow(options);
+    if (!cachedIndex && options.loadIndex) cachedIndex = await options.loadIndex();
     if (!params.force && cachedIndex && isIndexFresh(cachedIndex, now)) {
       return { status: "skipped", index: withSource(cachedIndex, "remote"), diff: buildRuleCatalogDiff(cachedIndex) };
     }
@@ -537,17 +542,24 @@ export function createRuleCatalogService(options: RuleCatalogServiceOptions = {}
     });
     const cacheKey = buildCacheKey(parents);
     const now = params.now ?? getNow(options);
+    if (!discoveryCache.has(cacheKey) && options.loadDiscovery) {
+      const persisted = await options.loadDiscovery(cacheKey);
+      if (persisted) discoveryCache.set(cacheKey, persisted);
+    }
     if (!params.force) {
       const cached = discoveryCache.get(cacheKey);
       if (cached && now < cached.expiresAt) return cached;
+      if (cached && options.serveStaleWithoutRefresh) return { ...cached, source: "stale" };
     }
+    if (!params.force && options.serveCachedOnly) throw new RuleIndexUnavailableError();
 
     const existing = discoveryInflight.get(cacheKey);
     if (existing) return existing;
 
     const next = fetchCnDiscovery(parents)
-      .then((result) => {
+      .then(async (result) => {
         discoveryCache.set(cacheKey, result);
+        await options.saveDiscovery?.(cacheKey, result);
         return result;
       })
       .catch((error) => {

@@ -388,6 +388,27 @@ describe("rule catalog service", () => {
     expect(page.items[0].url).toContain("/geosite/");
   });
 
+  it("serves a persisted stale index without calling GitHub on a cold request", async () => {
+    const fetchImpl = vi.fn(async () => { throw new Error("network should not be used"); }) as unknown as typeof fetch;
+    const service = createRuleCatalogService({
+      fetchImpl,
+      now: () => 2_000,
+      loadIndex: async () => ({ geosite: ["google"], geoip: [], fetchedAt: 100, expiresAt: 200, source: "remote" }),
+      serveCachedOnly: true,
+      serveStaleWithoutRefresh: true,
+    });
+    const result = await service.searchRules({ keyword: "google", page: 1, size: 5 });
+    expect(result).toMatchObject({ source: "stale", totalMatched: 1 });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("requires the background refresh when no persistent cache exists", async () => {
+    const fetchImpl = vi.fn(async () => { throw new Error("network should not be used"); }) as unknown as typeof fetch;
+    const service = createRuleCatalogService({ fetchImpl, loadIndex: async () => null, serveCachedOnly: true });
+    await expect(service.searchRules({ keyword: "google", page: 1, size: 5 })).rejects.toBeInstanceOf(RuleIndexUnavailableError);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("caches CN discovery and returns stale discovery after later rule-list failures", async () => {
     let failLists = false;
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {

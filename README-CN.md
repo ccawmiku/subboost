@@ -1,85 +1,37 @@
-<!-- markdownlint-disable MD033 MD041 -->
-<div align="center">
-  <p><img src="docs/assets/logo.png" alt="SubBoost" width="96"></p>
-  <h1>SubBoost</h1>
-  <p>
-    <img src="https://img.shields.io/badge/platform-Linux%20%2B%20Docker-lightgrey.svg" alt="平台：Linux + Docker">
-    <img src="https://img.shields.io/badge/version-2.8.1-green.svg" alt="版本 2.8.1">
-    <a href="https://subboost.org"><img src="https://img.shields.io/badge/app-subboost.org-brightgreen.svg" alt="在线入口"></a>
-    <a href="https://docs.subboost.org"><img src="https://img.shields.io/badge/docs-subboost.org-blue.svg" alt="文档"></a>
-    <img src="https://img.shields.io/badge/image-GHCR-blue.svg" alt="GHCR 镜像">
-  </p>
-  <p><strong><a href="README.md">English</a> | <a href="README-CN.md">中文</a></strong></p>
-</div>
-<!-- markdownlint-enable MD033 MD041 -->
+# SubBoost CF Personal
 
-**SubBoost** 是一个 **Clash/Mihomo 订阅转换、增强和管理** 工具。可以将机场订阅和自建节点转换为优化后的聚合订阅，并自动更新。通过 UI 可视化，一键实现 **链式代理、精确分流、防 DNS 泄露和多订阅聚合** 等高级功能。
+[English](README.md) · [Cloudflare 部署教程](docs/CLOUDFLARE_DEPLOY.md) · [许可证](LICENSE) · [改版声明](NOTICE.md)
 
-## 亮点与场景
+这是 [SubBoost 原版](https://github.com/SubBoost/subboost) 的**非官方 Cloudflare 改版**，用 Workers、D1 和 Queues 运行订阅转换与管理界面。你需要部署自己的实例并创建自己的管理员；本仓库没有可共用的账号、数据库或订阅服务。
 
-- **订阅转换**：支持订阅链接、YAML 文件和节点链接等多种格式导入。
-- **节点管理**：支持批量对节点重命名、删除或配置监听端口。
-- **节点筛选**：可在分流组高级模式中按导入源、地区和自定义规则筛选节点。
-- **链式代理**：一键可视化配置链式代理和 `中转代理组`。
-- **精确分流**：内置 30 多个常用代理组和 2000 多条远程规则集供启用。
-- **规则管理**：可修改规则顺序，供高级用户深度自定义。
-- **防 DNS 泄露**：默认的 `基础和 DNS 配置` 可防止 DNS 泄露。
-- **自动刷新**：定时自动刷新订阅，刷新时可智能匹配节点。
+## 适合什么场景
 
-## 界面展示
+- 把订阅链接、YAML 和节点链接导入可视化配置生成器，生成 Clash/Mihomo 配置。
+- 用代理组、规则、DNS、链式代理和多来源聚合管理配置。
+- 在 Cloudflare 上运行单管理员实例；每条订阅最多 100 个节点，实例最多 20 条订阅，每条最多 10 个来源。
+- 由 Queue 处理来源预览、订阅刷新和 YAML 生成。免费额度能否满足你的使用量，取决于 Cloudflare 当前限制和实际请求量。
 
-<p align="center">
-  <img src="docs/assets/screenshot-main.png" alt="SubBoost 可视化配置界面" width="960">
-</p>
+**开始部署：**按 [Cloudflare 部署教程](docs/CLOUDFLARE_DEPLOY.md) 从零创建 Worker、D1、Queue 和密钥。教程同时说明首次初始化、更新、备份和 403 等常见问题。[运行结构](local/cloudflare/README.md) 解释各组件的用途。
 
-## 使用和部署
+## 与原版的关系
 
-- 在线入口：[无需部署 - 直接使用的公益服务](https://subboost.org)
-- 部署文档：[一键部署 - 拉取镜像构建，速度快配置要求低](https://docs.subboost.org/deploy/one-click)
-- 部署文档：[高级部署 - 编译源码构建，速度慢配置要求高](https://docs.subboost.org/deploy/advanced)
-- 配置教程：[草履虫也能学会的 Clash 配置：UI 界面一键配置精确分流、链式代理](https://ryanvan.com/t/topic/59?u=ryan)
+本仓库保留了原版的 Next.js/PostgreSQL 自部署代码，但这里的主要发布路径是 Cloudflare 个人版。原版 Docker 镜像、原版在线服务与原版发布流程不等于本改版的 Cloudflare 部署。需要原版功能和支持，请访问 [SubBoost/subboost](https://github.com/SubBoost/subboost)。本改版的变更与来源见 [NOTICE.md](NOTICE.md)。
 
-## 开发说明
+## 开发
 
-开发者可以从源码启动本地开发环境：
+项目要求的 Node.js 版本见 `package.json`。在仓库根目录运行：
 
-```bash
+```powershell
 npm ci
-npm run dev
-```
-
-常用检查：
-
-```bash
 npm run lint
 npm run test:unit
-npm run check:local-app
+npm run local:typecheck
 ```
 
-## 相关链接
+Cloudflare 构建命令为 `npm --prefix local run build:vinext`。本机部署配置、Worker 密钥、数据库备份和真实订阅链接不能提交到 Git；公开模板是 [wrangler.example.jsonc](local/wrangler.example.jsonc)。贡献规范见 [CONTRIBUTING.md](docs/CONTRIBUTING.md)。
 
-- 在线入口：[https://subboost.org](https://subboost.org)
-- 部署文档：[https://docs.subboost.org](https://docs.subboost.org)
-- 发行公告：[docs/release-notes.md](./docs/release-notes.md)
-- 更新日志：[https://subboost.org/faq](https://subboost.org/faq)
-- 社区反馈：[LINUX DO](https://linux.do/) & [IDC Flare](https://idcflare.com/)；同时感谢论坛中小伙伴们的积极讨论和反馈
+## 许可和源码
 
-## ⭐轨迹
+此改版保留原版的 [GNU AGPL-3.0-only](LICENSE) 许可及原作者声明，并标明了改动。通过网络提供修改后的服务时，应向用户提供**该运行版本**的对应源码；界面提供源码链接。若你再次修改并部署，请将 `NEXT_PUBLIC_SOURCE_REPOSITORY_URL` 指向你公开的对应源码仓库。参见 [改版声明](NOTICE.md) 和 [第三方说明](docs/THIRD_PARTY_NOTICES.md)。
 
-<a href="https://www.star-history.com/?repos=subboost%2Fsubboost&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=subboost/subboost&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=subboost/subboost&type=date&legend=top-left" />
-   <img alt="SubBoost Star 成长轨迹" src="https://api.star-history.com/chart?repos=subboost/subboost&type=date&legend=top-left" />
- </picture>
-</a>
-
-## 开源许可
-
-SubBoost 公开源码以 [GNU Affero General Public License v3.0 only](./LICENSE) 授权。
-
-如果你修改 SubBoost 并通过网络向用户提供服务，AGPL-3.0 要求你向这些用户提供对应源码。公开源码入口是 [SubBoost/subboost](https://github.com/SubBoost/subboost)。
-
-## 免责声明
-
-本项目不提供任何代理服务，不对第三方订阅内容的可用性与合法性作出保证。
+本项目不提供代理节点或订阅服务，也不保证第三方订阅的可用性或合法性。

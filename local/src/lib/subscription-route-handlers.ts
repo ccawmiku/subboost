@@ -5,9 +5,9 @@ import {
   deleteSubscription,
   getSubscription,
   listSubscriptions,
-  refreshSubscription,
   updateSubscription,
 } from "@local/lib/subscription-service";
+import { getManualRefreshJob, startManualRefresh } from "@local/lib/manual-refresh";
 
 export function getSubscriptionIdFromQuery(request: Request): string {
   return new URL(request.url).searchParams.get("id")?.trim() || "";
@@ -68,9 +68,10 @@ export async function deleteSubscriptionResponse(id: string) {
 
 export async function refreshSubscriptionResponse(id: string) {
   return withCurrentAdmin(async (admin) => {
-    const result = await refreshSubscription(admin.id, id);
-    if (!result) return apiError("Subscription not found.", "NOT_FOUND", 404);
-    if (!result.ok) return json(result.response.body, result.response.status);
-    return json(result.body);
+    return startManualRefresh(admin.id, id);
   });
+}
+
+export async function refreshSubscriptionJobResponse(id: string, jobId: string) {
+  return withCurrentAdmin((admin) => getManualRefreshJob(admin.id, id, jobId));
 }

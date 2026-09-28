@@ -22,6 +22,7 @@ export type FooterLink = {
 type FooterProps = {
   mode?: FooterMode;
   buildVersion?: string | null;
+  sourceRepositoryUrl?: string;
   brandLinks?: FooterLink[];
   helpLinks?: FooterLink[];
   resourceLinks?: FooterLink[];
@@ -118,12 +119,12 @@ function FooterBrandIcon({ link }: { link: FooterLink }) {
   return <ExternalLink className="h-5 w-5 text-white/50" />;
 }
 
-function buildDefaultHelpLinks(mode: FooterMode): FooterLink[] {
+function buildDefaultHelpLinks(mode: FooterMode, repositoryUrl: string): FooterLink[] {
   if (mode === "local") {
     return [
-      { href: sourceRepositoryUrl, label: "开源仓库", external: true },
-      { href: "https://ryanvan.com/t/topic/59?u=ryan", label: "配置教程", external: true },
-      { href: "https://subboost.org/faq", label: "常见问题", external: true },
+      { href: repositoryUrl, label: "本版本源码 (AGPL)", external: true },
+      { href: `${repositoryUrl}/blob/cloudflare-free/docs/CLOUDFLARE_DEPLOY.md`, label: "Cloudflare 部署教程", external: true },
+      { href: "https://ryanvan.com/t/topic/59?u=ryan", label: "原版配置教程", external: true },
     ];
   }
   return [
@@ -136,7 +137,8 @@ function buildDefaultHelpLinks(mode: FooterMode): FooterLink[] {
 export function Footer({
   mode = "default",
   buildVersion,
-  brandLinks = defaultBrandLinks,
+  sourceRepositoryUrl: repositoryUrl = sourceRepositoryUrl,
+  brandLinks,
   helpLinks,
   resourceLinks = defaultResourceLinks,
 }: FooterProps) {
@@ -150,7 +152,8 @@ export function Footer({
     ],
     hasUser
   );
-  const visibleHelpLinks = filterLinks(helpLinks ?? buildDefaultHelpLinks(mode), hasUser);
+  const visibleBrandLinks = brandLinks ?? [{ ...defaultBrandLinks[0], href: repositoryUrl }, ...defaultBrandLinks.slice(1)];
+  const visibleHelpLinks = filterLinks(helpLinks ?? buildDefaultHelpLinks(mode, repositoryUrl), hasUser);
   const visibleResourceLinks = filterLinks(resourceLinks, hasUser);
 
   return (
@@ -169,9 +172,9 @@ export function Footer({
               <span className="font-semibold text-white">SubBoost</span>
             </div>
             <p className="text-sm leading-relaxed text-white/50">{SUBBOOST_FOOTER_DESCRIPTION}</p>
-            {brandLinks.length > 0 && (
+            {visibleBrandLinks.length > 0 && (
               <div className="flex items-center gap-4">
-                {brandLinks.map((link) => (
+                {visibleBrandLinks.map((link) => (
                   <a
                     key={link.href}
                     href={link.href}

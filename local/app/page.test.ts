@@ -70,4 +70,64 @@ describe("local home page adapter", () => {
     expect((fetch as any).mock.calls.at(-1)[0]).toBe("/api/subscriptions/sub%2F1");
     expect((fetch as any).mock.calls.at(-1)[1]).toEqual(expect.objectContaining({ method: "PUT" }));
   });
+
+  it("waits for a queued Cloudflare source import", async () => {
+    const pending = { status: 202, json: async () => ({ jobId: "job 1" }) };
+    const complete = { status: 200, ok: true };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(complete));
+    mocks.readSourceImportResponse.mockResolvedValueOnce({ content: "proxies: []", headers: {}, parseResult: { nodes: [] } });
+
+    await expect(adapter().productApi.sourceImport.importSource({ url: "https://example.test/sub" })).resolves.toMatchObject({
+      content: "proxies: []",
+    });
+    expect(fetch).toHaveBeenLastCalledWith("/api/source-import?jobId=job%201", { cache: "no-store" });
+    expect(mocks.readSourceImportResponse).toHaveBeenCalledWith(complete);
+  });
+
+  it("reads a CORS-enabled source in the browser after the Worker receives 403", async () => {
+    const pending = new Response(JSON.stringify({ jobId: "job-1" }), { status: 202 });
+    const blocked = new Response(JSON.stringify({ error: "HTTP 403" }), { status: 403 });
+    const source = new Response("dmxlc3M6Ly8=", { status: 200, headers: { "content-type": "text/plain" } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(blocked).mockResolvedValueOnce(source));
+
+    await expect(adapter().productApi.sourceImport.importSource({ url: "https://example.test/sub" })).resolves.toMatchObject({
+      content: "dmxlc3M6Ly8=",
+      headers: { "content-type": "text/plain" },
+    });
+    expect(fetch).toHaveBeenLastCalledWith("https://example.test/sub", expect.objectContaining({
+      mode: "cors",
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    }));
+    expect(mocks.readSourceImportResponse).not.toHaveBeenCalled();
+  });
+
+  it("preserves the Worker error when browser CORS access fails", async () => {
+    const pending = new Response(JSON.stringify({ jobId: "job-1" }), { status: 202 });
+    const blocked = new Response(JSON.stringify({ error: "HTTP 403" }), { status: 403 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(blocked).mockRejectedValueOnce(new TypeError("CORS blocked")));
+    mocks.readSourceImportResponse.mockRejectedValueOnce(new Error("HTTP 403"));
+
+    await expect(adapter().productApi.sourceImport.importSource({ url: "https://example.test/sub" })).rejects.toThrow("HTTP 403");
+    expect(mocks.readSourceImportResponse).toHaveBeenCalledWith(blocked);
+  });
+
+  it("does not bypass a 403 from the import API before a job is queued", async () => {
+    const blocked = new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(blocked));
+    mocks.readSourceImportResponse.mockRejectedValueOnce(new Error("Forbidden"));
+
+    await expect(adapter().productApi.sourceImport.importSource({ url: "https://example.test/sub" })).rejects.toThrow("Forbidden");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a non-403 import error from the browser", async () => {
+    const unavailable = new Response(JSON.stringify({ error: "HTTP 502" }), { status: 502 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(unavailable));
+    mocks.readSourceImportResponse.mockRejectedValueOnce(new Error("HTTP 502"));
+
+    await expect(adapter().productApi.sourceImport.importSource({ url: "https://example.test/sub" })).rejects.toThrow("HTTP 502");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

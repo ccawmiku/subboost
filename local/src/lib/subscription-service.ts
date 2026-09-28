@@ -25,8 +25,10 @@ import { getAppUrl } from "./env";
 import { prisma } from "./prisma";
 import { fetchSourceUserInfoHeadersDirect, importSourceUrlDirect } from "./source-import";
 import { normalizeLocalAutoUpdateIntervalSeconds } from "./auto-update-policy";
+import { scheduleSubscriptionYaml } from "./yaml-jobs";
+import { compareAndSetSubscriptionWithState, updateSubscriptionWithReset } from "./subscription-atomic";
 
-export const MAX_NODES_PER_SUBSCRIPTION = 10000;
+export const MAX_NODES_PER_SUBSCRIPTION = 100;
 export const CACHE_TTL_SECONDS = 3600;
 
 export type SubscriptionRow = {
@@ -104,6 +106,7 @@ export type GeneratedSubscriptionYaml = {
   cacheExpirySeconds: number;
   autoUpdateIntervalSeconds: number | null;
   isAdmin: boolean;
+  stale?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -233,6 +236,7 @@ export async function createSubscription(ownerId: string, body: unknown): Promis
     },
     include: { autoUpdateState: true },
   });
+  await scheduleSubscriptionYaml(row.token);
   return formatSubscription(row);
 }
 
@@ -279,20 +283,8 @@ export async function updateSubscription(ownerId: string, id: string, body: unkn
     resetAutoUpdateState = current.autoUpdateInterval === null && nextAutoUpdateInterval !== null;
   }
 
-  const row = await prisma.$transaction(async (tx) => {
-    if (resetAutoUpdateState) {
-      await tx.subscriptionAutoUpdateState.upsert({
-        where: { subscriptionId: current.id },
-        create: { subscriptionId: current.id },
-        update: createResetSubscriptionAutoUpdateState(),
-      });
-    }
-    return tx.subscription.update({
-      where: { id: current.id },
-      data,
-      include: { autoUpdateState: true },
-    });
-  });
+  const row = await updateSubscriptionWithReset(current.id, data, resetAutoUpdateState);
+  await scheduleSubscriptionYaml(row.token);
   return formatSubscription(row);
 }
 
@@ -353,25 +345,19 @@ async function persistRefreshSuccess(params: {
   config: Record<string, unknown>;
   cachedAt: Date;
 }): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.subscription.updateMany({
-      where: { id: params.subscriptionId, updatedAt: params.expectedUpdatedAt },
-      data: {
+  return compareAndSetSubscriptionWithState({
+    subscriptionId: params.subscriptionId,
+    expectedUpdatedAt: params.expectedUpdatedAt,
+    subscriptionData: {
         encryptedNodes: encryptJson(params.snapshot.nodes),
         encryptedConfig: encryptJson(params.config),
         encryptedSubscriptionInfo: encryptJson(params.snapshot.subscriptionInfo),
         lastUpdatedAt: params.cachedAt,
         cacheExpiresAt: buildSubscriptionCacheExpiry(params.cachedAt),
         updatedAt: params.cachedAt,
-      },
-    });
-    if (updated.count !== 1) return false;
-    await tx.subscriptionAutoUpdateState.upsert({
-      where: { subscriptionId: params.subscriptionId },
-      create: { subscriptionId: params.subscriptionId },
-      update: createResetSubscriptionAutoUpdateState(),
-    });
-    return true;
+    },
+    stateCreate: {},
+    stateUpdate: createResetSubscriptionAutoUpdateState(),
   });
 }
 
@@ -419,6 +405,7 @@ export async function refreshSubscription(ownerId: string, id: string) {
       },
     };
   }
+  await scheduleSubscriptionYaml(row.token);
   return {
     ok: true as const,
     body: buildManualRefreshSuccessResponseBody({
@@ -430,7 +417,7 @@ export async function refreshSubscription(ownerId: string, id: string) {
   };
 }
 
-export async function generateSubscriptionYaml(token: string): Promise<GeneratedSubscriptionYaml | null> {
+export async function generateSubscriptionYaml(token: string, recordAccess = true): Promise<GeneratedSubscriptionYaml | null> {
   const row = await prisma.subscription.findUnique({ where: { token }, include: { autoUpdateState: true } });
   if (!row) return null;
   const secrets = readSubscriptionSecrets(row);
@@ -443,7 +430,9 @@ export async function generateSubscriptionYaml(token: string): Promise<Generated
       proxyProviders,
     })
   );
-  await prisma.subscription.update({ where: { id: row.id }, data: { lastAccessedAt: new Date() } });
+  if (recordAccess) {
+    await prisma.subscription.update({ where: { id: row.id }, data: { lastAccessedAt: new Date() } });
+  }
   return {
     yaml,
     name: row.name,

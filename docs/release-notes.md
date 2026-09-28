@@ -1,3 +1,9 @@
+# 上游 SubBoost 发布记录 / Upstream SubBoost release notes
+
+以下内容来自原版的 Docker/PostgreSQL 发布流程，不是本仓库 Cloudflare 个人版的更新命令。Cloudflare 部署与更新请看 [部署指南](CLOUDFLARE_DEPLOY.md)。
+
+The entries below describe upstream Docker/PostgreSQL releases, not the update procedure for this Cloudflare edition. See the [Cloudflare deployment guide](CLOUDFLARE_DEPLOY.en.md).
+
 # SubBoost v2.8.1
 
 ## 中文

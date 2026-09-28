@@ -362,8 +362,8 @@ describe("local subscription service", () => {
       "节点 #1 必须是对象"
     );
     await expect(
-      createSubscription("owner-1", { name: "Too many", nodes: Array.from({ length: 10_001 }, () => null) })
-    ).rejects.toThrow("Node count cannot exceed 10000");
+      createSubscription("owner-1", { name: "Too many", nodes: Array.from({ length: 101 }, () => null) })
+    ).rejects.toThrow("Node count cannot exceed 100");
   });
 
   it("validates node filters and permits provider-only output on create", async () => {

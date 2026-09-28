@@ -11,7 +11,8 @@ export type LocalApiErrorCode =
   | "RATE_LIMITED"
   | "PAYLOAD_TOO_LARGE"
   | "CONFIGURATION_ERROR"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "PREPARING";
 
 export const LOCAL_JSON_BODY_LIMITS = {
   small: 64 * 1024,

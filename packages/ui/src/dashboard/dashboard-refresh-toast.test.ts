@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { buildRefreshSubscriptionSuccessToast } from "./dashboard-refresh-toast";
 
 describe("buildRefreshSubscriptionSuccessToast", () => {
+  it("reports a refresh that is still queued", () => {
+    expect(buildRefreshSubscriptionSuccessToast({ queued: true })).toEqual({
+      title: "刷新已提交，后台仍在处理；稍后查看订阅状态。",
+      variant: "warning",
+    });
+  });
   it("reports subscriptions without URL sources", () => {
     expect(buildRefreshSubscriptionSuccessToast({ attemptedUrlFetch: false })).toEqual({
       title: "刷新完成：当前订阅没有可拉取的 URL 源，本次仅重新解析已保存内容。",

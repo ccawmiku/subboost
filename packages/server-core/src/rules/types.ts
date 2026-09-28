@@ -108,6 +108,12 @@ export type RuleCatalogServiceOptions = {
   userAgent?: string;
   getGitHubToken?: () => string | undefined;
   logger?: Pick<Console, "warn" | "error" | "info">;
+  loadIndex?: () => Promise<RemoteRuleIndex | null>;
+  saveIndex?: (index: RemoteRuleIndex) => Promise<void>;
+  loadDiscovery?: (key: string) => Promise<CnRuleCandidateDiscovery | null>;
+  saveDiscovery?: (key: string, discovery: CnRuleCandidateDiscovery) => Promise<void>;
+  serveStaleWithoutRefresh?: boolean;
+  serveCachedOnly?: boolean;
 };
 
 export class RuleIndexUnavailableError extends Error {
