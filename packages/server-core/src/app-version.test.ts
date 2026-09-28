@@ -190,4 +190,16 @@ describe("app version resolution", () => {
 
     expect(resolveAppVersionInfo({ env: { APP_VERSION: " " }, cwd: "/repo/app", readFile }).releaseVersion).toBe("0.0.0");
   });
+
+  it("uses bundled package metadata when runtime package files are unavailable", () => {
+    const info = resolveAppVersionInfo({
+      env: {},
+      cwd: "/worker",
+      readFile: createReadFile({}),
+      fallbackReleaseVersion: "2.8.1",
+    });
+
+    expect(info.releaseVersion).toBe("2.8.1");
+    expect(info.buildVersion).toBe("2.8.1");
+  });
 });

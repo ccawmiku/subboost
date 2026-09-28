@@ -34,6 +34,6 @@ For parser, template, subscription output, or deployment changes, also run the f
 
 ## Documentation
 
-- Keep README changes bilingual: update `README-CN.md` first, then sync `README.md`.
+- Keep README changes bilingual: update the default Chinese `README.md` and the English `README.en.md` together. `README-CN.md` is a compatibility link.
 - Keep Cloudflare deployment instructions in `docs/CLOUDFLARE_DEPLOY.md` and link them from the README.
 - Avoid publishing maintainer-only workflow, private infrastructure details, or machine-specific paths.

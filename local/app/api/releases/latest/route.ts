@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveAppVersionInfo } from "@subboost/server-core/app-version";
 import { compareStableVersions, parseStableVersion } from "@local/lib/release-version";
+import localPackage from "../../../../package.json";
 
 export const revalidate = 3600;
 
@@ -48,6 +49,7 @@ export async function GET() {
   const { releaseVersion: currentVersion } = resolveAppVersionInfo({
     env: process.env,
     cwd: process.cwd(),
+    fallbackReleaseVersion: localPackage.version,
   });
   const currentStable = parseStableVersion(currentVersion);
   if (!currentStable) return response(buildFallbackPayload(currentVersion));

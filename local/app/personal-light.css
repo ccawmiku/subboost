@@ -267,3 +267,65 @@ html.personal-light [class~="text-sky-300"],
 html.personal-light [class~="text-sky-400"],
 html.personal-light [class~="text-blue-200"],
 html.personal-light [class~="text-blue-300"] { color: #196a9b; }
+
+/* Protocol labels need darker ink on the light node rows. */
+html.personal-light .protocol-badge {
+  background-color: #ebe8ef;
+  border-color: #d5cbdc;
+  color: #55465e;
+  font-weight: 600;
+}
+
+html.personal-light .protocol-badge:is([data-protocol="ss"], [data-protocol="ssr"]) {
+  background-color: #e2edfc;
+  border-color: #b8d1ef;
+  color: #245b89;
+}
+
+html.personal-light .protocol-badge:is([data-protocol="vmess"], [data-protocol="relay"]) {
+  background-color: #eee5fa;
+  border-color: #d6bfe9;
+  color: #6b3d96;
+}
+
+html.personal-light .protocol-badge[data-protocol="vless"] {
+  background-color: #dff3eb;
+  border-color: #addfc9;
+  color: #08644f;
+}
+
+html.personal-light .protocol-badge[data-protocol="trojan"] {
+  background-color: #fde6e9;
+  border-color: #f0bdc7;
+  color: #9c3047;
+}
+
+html.personal-light .protocol-badge[data-protocol="anytls"] {
+  background-color: #dff2f1;
+  border-color: #b7dedd;
+  color: #17676b;
+}
+
+html.personal-light .protocol-badge:is([data-protocol="hysteria2"], [data-protocol="hy2"]) {
+  background-color: #fff0d8;
+  border-color: #f0cf9b;
+  color: #85500f;
+}
+
+html.personal-light .protocol-badge[data-protocol="tuic"] {
+  background-color: #e0f1f8;
+  border-color: #b7d9e9;
+  color: #176586;
+}
+
+html.personal-light .protocol-badge:is([data-protocol="http"], [data-protocol="https"]) {
+  background-color: #fff1d9;
+  border-color: #ebd09f;
+  color: #80500d;
+}
+
+html.personal-light .protocol-badge[data-protocol="ssh"] {
+  background-color: #fbe5f0;
+  border-color: #efbfd7;
+  color: #963562;
+}

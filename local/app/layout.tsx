@@ -8,6 +8,7 @@ import { ConfirmDialogHost } from "@subboost/ui/components/ui/confirm-dialog";
 import { Toaster } from "@subboost/ui/components/ui/toaster";
 import { LocalHeader } from "@local/components/local-header";
 import { resolveAppVersionInfo } from "@subboost/server-core/app-version";
+import localPackage from "../package.json";
 import {
   SUBBOOST_FAVICON_PATH,
   SUBBOOST_ICON_PATH,
@@ -39,7 +40,11 @@ export const viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const { buildVersion } = resolveAppVersionInfo({ env: process.env, cwd: process.cwd() });
+  const { buildVersion } = resolveAppVersionInfo({
+    env: process.env,
+    cwd: process.cwd(),
+    fallbackReleaseVersion: localPackage.version,
+  });
   const configuredSourceUrl = process.env.NEXT_PUBLIC_SOURCE_REPOSITORY_URL?.trim();
   const sourceUrl = configuredSourceUrl?.startsWith("https://")
     ? configuredSourceUrl

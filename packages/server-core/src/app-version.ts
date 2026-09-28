@@ -16,6 +16,7 @@ export type ResolveAppVersionInfoOptions = {
   env: AppVersionEnvironment;
   cwd: string;
   readFile?: (filePath: string) => string;
+  fallbackReleaseVersion?: string;
 };
 
 const SEMVER_PATTERN =
@@ -93,6 +94,7 @@ export function resolveAppVersionInfo({
   env,
   cwd,
   readFile = (filePath) => readFileSync(filePath, "utf8"),
+  fallbackReleaseVersion,
 }: ResolveAppVersionInfoOptions): AppVersionInfo {
   const explicitVersion = normalizeText(env.APP_VERSION);
   const explicitVersionToken = normalizeText(env.APP_VERSION_TOKEN);
@@ -104,6 +106,7 @@ export function resolveAppVersionInfo({
   const releaseVersion =
     normalizeReleaseVersion(env.APP_RELEASE_VERSION) ??
     inferReleaseVersion(explicitVersion) ??
+    normalizeReleaseVersion(fallbackReleaseVersion) ??
     readPackageVersion(cwd, readFile) ??
     "0.0.0";
   const buildVersion = explicitVersion ?? formatBuildVersion(releaseVersion, buildSha);

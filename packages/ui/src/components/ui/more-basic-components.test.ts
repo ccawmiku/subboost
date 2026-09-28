@@ -45,6 +45,7 @@ describe("additional basic UI components", () => {
     expect(html).toContain("placeholder=\"Write\"");
     expect(html).toContain("VMess");
     expect(html).toContain("badge-extra");
+    expect(html).toContain('data-protocol="vmess"');
     expect(html).toContain("src=\"https://example.test/a.png\"");
     expect(html).toContain("fallback");
   });
