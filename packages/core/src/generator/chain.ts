@@ -10,6 +10,11 @@ import type { ParsedNode } from "@subboost/core/types/node";
 import type { DialerProxyGroup } from "@subboost/core/types/template-config";
 import { DEFAULT_LOAD_BALANCE_STRATEGY, type ProxyGroupGroupType } from "@subboost/core/types/config";
 import { DEFAULT_SUBBOOST_CONFIG } from "@subboost/core/config/defaults";
+import {
+  isHealthCheckProxyGroupType,
+  normalizeGroupTestInterval,
+  normalizeGroupTestUrl,
+} from "@subboost/core/proxy-group-advanced";
 import { buildTypedProxyGroup, uniqueProxyNames } from "./proxy-group-type";
 
 export interface DialerProxyGroupConfig {
@@ -40,12 +45,15 @@ export function generateDialerProxyGroups(
     .map((group) => ({ group, proxies: resolveDialerGroupProxies(group) }))
     .filter(({ proxies }) => proxies.length > 0)
     .map((group) => {
+      const supportsProbes = isHealthCheckProxyGroupType(group.group.type);
       return buildTypedProxyGroup({
         name: group.group.name,
         groupType: group.group.type,
         proxies: group.proxies,
-        testUrl: group.group.type === "url-test" ? group.group.testUrl || testUrl : testUrl,
-        testInterval,
+        testUrl: supportsProbes ? normalizeGroupTestUrl(group.group.testUrl) || testUrl : testUrl,
+        testInterval: supportsProbes
+          ? (normalizeGroupTestInterval(group.group.testInterval) ?? testInterval)
+          : testInterval,
         strategy: group.group.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
         extraFields: providerUse,
         urlTestLazy: true,

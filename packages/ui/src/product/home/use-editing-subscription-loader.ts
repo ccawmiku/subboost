@@ -8,7 +8,10 @@ import { normalizePersistedRuleOrder } from "@subboost/core/generator/rules";
 import { ensureCustomRulesHaveIds } from "@subboost/core/rules/custom-rule-utils";
 import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
 import { resolveProxyGroupAdvancedModeEnabled } from "@subboost/core/proxy-group-advanced-mode";
-import { normalizeProxyGroupAdvancedConfig } from "@subboost/core/proxy-group-advanced";
+import {
+  normalizeGroupTestInterval,
+  normalizeProxyGroupAdvancedConfig,
+} from "@subboost/core/proxy-group-advanced";
 import { tryNormalizeSubscriptionUrlInput } from "@subboost/core/subscription/url-input";
 import {
   hasSubscriptionUserInfo,
@@ -568,7 +571,7 @@ export function useEditingSubscriptionLoader({
           ruleProviderBaseUrl:
             typeof cfg.ruleProviderBaseUrl === "string" ? (cfg.ruleProviderBaseUrl as string) : state.ruleProviderBaseUrl,
           testUrl: typeof cfg.testUrl === "string" ? (cfg.testUrl as string) : state.testUrl,
-          testInterval: typeof cfg.testInterval === "number" ? (cfg.testInterval as number) : state.testInterval,
+          testInterval: normalizeGroupTestInterval(cfg.testInterval) ?? state.testInterval,
           sharedHealthChecks: cfg.sharedHealthChecks === true,
           cnIpNoResolve: typeof (cfg as any).cnIpNoResolve === "boolean" ? Boolean((cfg as any).cnIpNoResolve) : state.cnIpNoResolve,
           experimentalCnUseCnRuleSet:

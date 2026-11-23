@@ -16,7 +16,12 @@ import type {
   ProxyGroupGroupType,
   RuleProvider,
 } from "@subboost/core/types/config";
-import { resolveProxyGroupMembers } from "@subboost/core/proxy-group-advanced";
+import {
+  isHealthCheckProxyGroupType,
+  normalizeGroupTestInterval,
+  normalizeGroupTestUrl,
+  resolveProxyGroupMembers,
+} from "@subboost/core/proxy-group-advanced";
 import { isSubscriptionInfoNodeName } from "@subboost/core/subscription/info-node-name";
 
 import { PROXY_GROUP_MODULES, type ProxyGroupModule, type ProxyGroupRule } from "./proxy-group-modules";
@@ -220,17 +225,22 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
     strategy?: LoadBalanceStrategy,
     extraFields: Record<string, unknown> = providerUse,
     groupTestUrl?: string,
-  ): ProxyGroup =>
-    buildTypedProxyGroup({
+    groupTestInterval?: number,
+  ): ProxyGroup => {
+    const supportsProbes = isHealthCheckProxyGroupType(groupType);
+    return buildTypedProxyGroup({
       name,
       groupType,
       proxies,
-      testUrl: groupType === "url-test" ? groupTestUrl || testUrl : testUrl,
-      testInterval,
+      testUrl: supportsProbes ? normalizeGroupTestUrl(groupTestUrl) || testUrl : testUrl,
+      testInterval: supportsProbes
+        ? (normalizeGroupTestInterval(groupTestInterval) ?? testInterval)
+        : testInterval,
       strategy,
       extraFields,
       urlTestLazy: false,
     });
+  };
 
   // 辅助函数：生成单个代理组
   const generateGroup = (module: ProxyGroupModule) => {
@@ -273,16 +283,19 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
         break;
 
       case "url-test":
-          groups.push(createGeneratedProxyGroup(
-            moduleName,
-            groupType,
-            resolveGroupProxyNames(filteredNodeNames, advanced, {
-              kind: "module",
-              id: module.id,
-              name: moduleName,
-            }),
-            undefined, providerUse, advanced?.testUrl,
-          ));
+        groups.push(createGeneratedProxyGroup(
+          moduleName,
+          groupType,
+          resolveGroupProxyNames(filteredNodeNames, advanced, {
+            kind: "module",
+            id: module.id,
+            name: moduleName,
+          }),
+          undefined,
+          providerUse,
+          advanced?.testUrl,
+          advanced?.testInterval,
+        ));
         break;
 
       case "fallback":
@@ -294,6 +307,10 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             id: module.id,
             name: moduleName,
           }),
+          undefined,
+          providerUse,
+          advanced?.testUrl,
+          advanced?.testInterval,
         ));
         break;
 
@@ -307,6 +324,9 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             name: moduleName,
           }),
           advanced?.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
+          providerUse,
+          advanced?.testUrl,
+          advanced?.testInterval,
         ));
         break;
 
@@ -362,7 +382,15 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
 
     if (usesFilteredNodeMembers(customGroup)) {
       if (customGroup.groupType === "url-test" || customGroup.groupType === "fallback") {
-        return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, {}, customGroup.advanced?.testUrl);
+        return createGeneratedProxyGroup(
+          customGroup.name,
+          customGroup.groupType,
+          resolveCustom(filteredNodeNames),
+          undefined,
+          {},
+          customGroup.advanced?.testUrl,
+          customGroup.advanced?.testInterval,
+        );
       }
       if (customGroup.groupType === "load-balance") {
         return createGeneratedProxyGroup(
@@ -370,7 +398,9 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
           customGroup.groupType,
           resolveCustom(filteredNodeNames),
           customGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
-          {}
+          {},
+          customGroup.advanced?.testUrl,
+          customGroup.advanced?.testInterval,
         );
       }
       return {
@@ -382,17 +412,36 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
       };
     }
     if (customGroup.groupType === "url-test") {
-      return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, providerUse, customGroup.advanced?.testUrl);
+      return createGeneratedProxyGroup(
+        customGroup.name,
+        customGroup.groupType,
+        resolveCustom(filteredNodeNames),
+        undefined,
+        providerUse,
+        customGroup.advanced?.testUrl,
+        customGroup.advanced?.testInterval,
+      );
     }
     if (customGroup.groupType === "fallback") {
-      return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames));
+      return createGeneratedProxyGroup(
+        customGroup.name,
+        customGroup.groupType,
+        resolveCustom(filteredNodeNames),
+        undefined,
+        providerUse,
+        customGroup.advanced?.testUrl,
+        customGroup.advanced?.testInterval,
+      );
     }
     if (customGroup.groupType === "load-balance") {
       return createGeneratedProxyGroup(
         customGroup.name,
         customGroup.groupType,
         resolveCustom(filteredNodeNames),
-        customGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY
+        customGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
+        providerUse,
+        customGroup.advanced?.testUrl,
+        customGroup.advanced?.testInterval,
       );
     }
     if (customGroup.groupType === "direct-first") {

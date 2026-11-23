@@ -1,6 +1,7 @@
 import type { ConfigState, SourceType, SubscriptionSource } from "./definitions";
 import { initialState } from "./definitions";
 import { safeParseJsonObject } from "@subboost/core/json";
+import { normalizeGroupTestInterval } from "@subboost/core/proxy-group-advanced";
 import { normalizeNodeNameFilterConfig } from "@subboost/core/subscription/node-name-filter";
 import { resolveProxyGroupAdvancedModeEnabled } from "@subboost/core/proxy-group-advanced-mode";
 import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
@@ -235,7 +236,8 @@ function normalizeHandoffState(raw: unknown): Partial<ConfigState> | null {
   if (typeof raw.mixedPort === "number" && Number.isFinite(raw.mixedPort)) out.mixedPort = raw.mixedPort;
   if (typeof raw.allowLan === "boolean") out.allowLan = raw.allowLan;
   if (typeof raw.testUrl === "string") out.testUrl = raw.testUrl;
-  if (typeof raw.testInterval === "number" && Number.isFinite(raw.testInterval)) out.testInterval = raw.testInterval;
+  const testInterval = normalizeGroupTestInterval(raw.testInterval);
+  if (testInterval !== undefined) out.testInterval = testInterval;
   out.sharedHealthChecks = raw.sharedHealthChecks === true;
   if (typeof raw.ruleProviderBaseUrl === "string") out.ruleProviderBaseUrl = raw.ruleProviderBaseUrl;
   if (typeof raw.cnIpNoResolve === "boolean") out.cnIpNoResolve = raw.cnIpNoResolve;

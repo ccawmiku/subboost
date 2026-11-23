@@ -34,6 +34,10 @@ vi.mock("../section-header", () => ({
   },
 }));
 
+vi.mock("./health-check-settings", () => ({
+  HealthCheckSettings: () => React.createElement("div", null, "health-check-settings"),
+}));
+
 vi.mock("./proxy-groups-categories", () => ({
   ProxyGroupsCategories: () => React.createElement("div", null, "categories-content"),
 }));
@@ -60,6 +64,7 @@ describe("ProxyGroupsSection", () => {
 
     expect(html).toContain("分流代理组");
     expect(html).toContain("2/2");
+    expect(html).toContain("health-check-settings");
     expect(html).toContain("categories-content");
     expect(mocks.headerProps).toMatchObject({
       isExpanded: true,
@@ -77,6 +82,7 @@ describe("ProxyGroupsSection", () => {
       }),
     );
 
+    expect(html).not.toContain("health-check-settings");
     expect(html).not.toContain("categories-content");
     expect(mocks.headerProps).toMatchObject({ isExpanded: false });
   });

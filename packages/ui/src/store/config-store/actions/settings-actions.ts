@@ -1,4 +1,5 @@
 import type { ConfigActions } from "../definitions";
+import { normalizeGroupTestInterval } from "@subboost/core/proxy-group-advanced";
 import { parseNodeNameFilterConfig } from "@subboost/core/subscription/node-name-filter";
 import type { GetState, SetAndGenerateConfig, SetState } from "../store-types";
 
@@ -40,7 +41,9 @@ export function createSettingsActions(
     },
 
     setTestInterval: (interval: number) => {
-      setAndGenerateConfig(() => ({ testInterval: interval }));
+      const normalized = normalizeGroupTestInterval(interval);
+      if (normalized === undefined) return;
+      setAndGenerateConfig(() => ({ testInterval: normalized }));
     },
 
     setSharedHealthChecks: (enabled: boolean) => {

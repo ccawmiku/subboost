@@ -162,4 +162,35 @@ describe("createDialerActions", () => {
       targetNodes: ["Target Z"],
     });
   });
+
+  it("normalizes and clears per-group testUrl and testInterval on dialer updates", () => {
+    const { actions, getState } = createHarness({
+      dialerProxyGroups: [
+        {
+          id: "dialer-1",
+          name: "Relay",
+          type: "fallback",
+          enabled: true,
+          relayNodes: ["Relay A"],
+          targetNodes: ["Target A"],
+        },
+      ],
+    });
+
+    actions.updateDialerProxyGroup("dialer-1", {
+      testUrl: " https://dialer.example/204 ",
+      testInterval: 60,
+    });
+    expect(getState().dialerProxyGroups[0]).toMatchObject({
+      testUrl: "https://dialer.example/204",
+      testInterval: 60,
+    });
+
+    actions.updateDialerProxyGroup("dialer-1", {
+      testUrl: "ftp://bad.example",
+      testInterval: 0,
+    });
+    expect(getState().dialerProxyGroups[0]).not.toHaveProperty("testUrl");
+    expect(getState().dialerProxyGroups[0]).not.toHaveProperty("testInterval");
+  });
 });

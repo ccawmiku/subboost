@@ -6,6 +6,7 @@ import { Badge } from "@subboost/ui/components/ui/badge";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import { useConfigStore } from "@subboost/ui/store/config-store";
 import { SectionHeader } from "../section-header";
+import { HealthCheckSettings } from "./health-check-settings";
 import { ProxyGroupsCategories } from "./proxy-groups-categories";
 
 export function ProxyGroupsSection({
@@ -36,6 +37,7 @@ export function ProxyGroupsSection({
 
       {isExpanded && (
         <div className="mt-2 space-y-2 pl-6">
+          <HealthCheckSettings />
           <ProxyGroupsCategories />
         </div>
       )}

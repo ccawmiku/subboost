@@ -222,7 +222,7 @@ function parsePositiveInteger(
   value: unknown,
   field: string
 ): { ok: true; value: number } | { ok: false; error: string } {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
     return invalid(`${field} 必须是正整数`);
   }
   return { ok: true, value };
@@ -447,6 +447,11 @@ function parseDialerProxyGroups(value: unknown): { ok: true; value: DialerProxyG
     if (!targetNodes.ok) return targetNodes;
     const groupTestUrl = item.testUrl === undefined ? undefined : parseHttpUrlString(item.testUrl, "dialerProxyGroups.testUrl");
     if (groupTestUrl && !groupTestUrl.ok) return groupTestUrl;
+    const groupTestInterval =
+      item.testInterval === undefined
+        ? undefined
+        : parsePositiveInteger(item.testInterval, "dialerProxyGroups.testInterval");
+    if (groupTestInterval && !groupTestInterval.ok) return groupTestInterval;
     const enabled = parseOptionalBoolean(item.enabled, "dialerProxyGroups.enabled");
     if (!enabled.ok) return enabled;
     out.push({
@@ -459,6 +464,7 @@ function parseDialerProxyGroups(value: unknown): { ok: true; value: DialerProxyG
       relayNodes: relayNodes.value,
       targetNodes: targetNodes.value,
       ...(groupTestUrl?.ok ? { testUrl: groupTestUrl.value } : {}),
+      ...(groupTestInterval?.ok ? { testInterval: groupTestInterval.value } : {}),
       ...(enabled.value !== undefined ? { enabled: enabled.value } : {}),
     });
   }

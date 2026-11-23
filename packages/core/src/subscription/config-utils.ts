@@ -21,7 +21,11 @@ import { normalizeCustomRuleValue } from "@subboost/core/rules/custom-rule-value
 import { supportsNoResolve } from "@subboost/core/rules/custom-rule-types";
 import { DEFAULT_SUBBOOST_CONFIG } from "@subboost/core/config/defaults";
 import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
-import { normalizeGroupTestUrl, normalizeProxyGroupAdvancedConfig } from "@subboost/core/proxy-group-advanced";
+import {
+  normalizeGroupTestInterval,
+  normalizeGroupTestUrl,
+  normalizeProxyGroupAdvancedConfig,
+} from "@subboost/core/proxy-group-advanced";
 import { normalizeProxyGroupTargetRef } from "@subboost/core/proxy-group-targets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -178,6 +182,8 @@ function normalizeDialerProxyGroups(value: unknown): DialerProxyGroup[] {
     const relayNodes = normalizeStringArray(item.relayNodes);
     const targetNodes = normalizeStringArray(item.targetNodes);
 
+    const testUrl = normalizeGroupTestUrl(item.testUrl);
+    const testInterval = normalizeGroupTestInterval(item.testInterval);
     out.push({
       id,
       name,
@@ -185,7 +191,8 @@ function normalizeDialerProxyGroups(value: unknown): DialerProxyGroup[] {
       ...(type === "load-balance" ? { strategy: strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY } : {}),
       relayNodes,
       targetNodes,
-      ...(normalizeGroupTestUrl(item.testUrl) ? { testUrl: normalizeGroupTestUrl(item.testUrl) } : {}),
+      ...(testUrl ? { testUrl } : {}),
+      ...(testInterval !== undefined ? { testInterval } : {}),
       ...(enabled !== undefined ? { enabled } : {}),
     });
   }

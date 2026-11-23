@@ -66,4 +66,23 @@ describe("config store settings actions", () => {
     ).toThrow("第 1 行");
     expect(store.state()).toEqual({});
   });
+
+  it("ignores non-positive or unsafe global testInterval values", () => {
+    const store = createStore({ testInterval: 300 });
+    const actions = createSettingsActions(
+      store.set as any,
+      store.get as any,
+      store.setAndGenerateConfig as any
+    );
+
+    for (const invalid of [0, -10, 1.5, Number.NaN, 9007199254740992]) {
+      actions.setTestInterval(invalid);
+    }
+    expect(store.state().testInterval).toBe(300);
+    expect(store.setAndGenerateConfig).not.toHaveBeenCalled();
+
+    actions.setTestInterval(120);
+    expect(store.state().testInterval).toBe(120);
+    expect(store.setAndGenerateConfig).toHaveBeenCalledTimes(1);
+  });
 });
