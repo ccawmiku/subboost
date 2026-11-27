@@ -125,6 +125,56 @@ describe("validateSubBoostTemplateConfig field validation", () => {
       },
       "dialerProxyGroups.enabled 必须是布尔值"
     );
+    for (const invalidInterval of [0, -1, 1.5, 9007199254740992]) {
+      expectInvalid(
+        {
+          dialerProxyGroups: [
+            {
+              id: "relay",
+              name: "Relay",
+              type: "fallback",
+              relayNodes: ["Relay A"],
+              targetNodes: ["Target A"],
+              testInterval: invalidInterval,
+            },
+          ],
+        },
+        "dialerProxyGroups.testInterval 必须是正整数"
+      );
+    }
+    const validDialerInterval = validateSubBoostTemplateConfig(
+      validConfig({
+        testInterval: 300,
+        dialerProxyGroups: [
+          {
+            id: "relay",
+            name: "Relay",
+            type: "fallback",
+            relayNodes: ["Relay A"],
+            targetNodes: ["Target A"],
+            testInterval: 60,
+          },
+        ],
+        proxyGroupAdvanced: {
+          auto: { testInterval: 45 },
+        },
+        customProxyGroups: [
+          {
+            id: "custom-fb",
+            name: "Custom FB",
+            emoji: "",
+            groupType: "fallback",
+            advanced: { testInterval: 90 },
+          },
+        ],
+      })
+    );
+    expect(validDialerInterval.ok).toBe(true);
+    if (validDialerInterval.ok) {
+      expect(validDialerInterval.config.dialerProxyGroups[0].testInterval).toBe(60);
+      expect(validDialerInterval.config.proxyGroupAdvanced?.auto?.testInterval).toBe(45);
+      expect(validDialerInterval.config.customProxyGroups[0].advanced?.testInterval).toBe(90);
+    }
 
     expectInvalid({ customRuleSets: "bad" as never }, "customRuleSets 必须是数组");
     expectInvalid(

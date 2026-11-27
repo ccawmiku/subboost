@@ -676,12 +676,14 @@ export function DialerProxyGroupsSection({
             groupType={settingsGroup.type}
             strategy={settingsGroup.strategy}
             testUrl={settingsGroup.testUrl}
+            testInterval={settingsGroup.testInterval}
             listenerTarget={target}
             listenerBinding={findGroupListenerBinding(groupListeners, target)}
             conflictState={listenerConflictState}
-            onSave={({ groupType, strategy, listener, testUrl }) => {
+            onSave={({ groupType, strategy, listener, testUrl, testInterval }) => {
               updateDialerProxyGroup(settingsGroup.id, {
                 testUrl,
+                testInterval,
                 type: groupType,
                 ...(groupType === "load-balance"
                   ? { strategy: strategy ?? settingsGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY }

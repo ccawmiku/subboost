@@ -1,4 +1,5 @@
 import type { ConfigState } from "./definitions";
+import { normalizeGroupTestInterval } from "@subboost/core/proxy-group-advanced";
 import { safeParseJsonObject } from "@subboost/core/json";
 import { normalizeNodeNameFilterConfig } from "@subboost/core/subscription/node-name-filter";
 import { getConfigDraftStorageNameForUser } from "./draft-storage";
@@ -74,6 +75,7 @@ export function normalizePersistedConfigState(
 ): Partial<ConfigState> {
   if (options.discardDraft) return {};
   const state = (isRecord(persistedState) ? persistedState : {}) as Partial<ConfigState>;
+  const testInterval = normalizeGroupTestInterval(state.testInterval);
 
   return {
     ...(state.template === "minimal" || state.template === "standard" || state.template === "full"
@@ -87,7 +89,7 @@ export function normalizePersistedConfigState(
     ...(typeof state.mixedPort === "number" ? { mixedPort: state.mixedPort } : {}),
     ...(typeof state.allowLan === "boolean" ? { allowLan: state.allowLan } : {}),
     ...(typeof state.testUrl === "string" ? { testUrl: state.testUrl } : {}),
-    ...(typeof state.testInterval === "number" ? { testInterval: state.testInterval } : {}),
+    ...(testInterval !== undefined ? { testInterval } : {}),
     sharedHealthChecks: state.sharedHealthChecks === true,
     ...(typeof state.ruleProviderBaseUrl === "string" ? { ruleProviderBaseUrl: state.ruleProviderBaseUrl } : {}),
     ...(typeof state.proxyGroupAdvancedModeEnabled === "boolean"

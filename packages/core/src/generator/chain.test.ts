@@ -183,4 +183,92 @@ describe("dialer proxy chain helpers", () => {
     });
   });
 
+  it("applies per-group testUrl and testInterval overrides across probe-capable dialer groups", () => {
+    const groups = generateDialerProxyGroups(
+      [
+        dialerGroup({
+          id: "auto-override",
+          name: "Auto Override",
+          type: "url-test",
+          relayNodes: ["Relay A"],
+          testUrl: "https://dialer.example/auto",
+          testInterval: 45,
+        }),
+        dialerGroup({
+          id: "fallback-override",
+          name: "Fallback Override",
+          type: "fallback",
+          relayNodes: ["Relay B"],
+          testUrl: "https://dialer.example/fallback",
+          testInterval: 90,
+        }),
+        dialerGroup({
+          id: "balance-override",
+          name: "Balance Override",
+          type: "load-balance",
+          strategy: "round-robin",
+          relayNodes: ["Relay C"],
+          testUrl: "https://dialer.example/balance",
+          testInterval: 150,
+        }),
+        dialerGroup({
+          id: "invalid-fallback",
+          name: "Fallback Defaulted",
+          type: "fallback",
+          relayNodes: ["Relay D"],
+          testUrl: "ftp://invalid.example",
+          testInterval: 0,
+        }),
+        dialerGroup({
+          id: "select-ignored",
+          name: "Select Ignored",
+          type: "select",
+          relayNodes: ["Relay E"],
+          testUrl: "https://dialer.example/ignored",
+          testInterval: 30,
+        }),
+      ],
+      "https://probe.example.com/204",
+      300,
+    );
+
+    expect(groups).toEqual([
+      {
+        name: "Auto Override",
+        type: "url-test",
+        proxies: ["Relay A"],
+        url: "https://dialer.example/auto",
+        interval: 45,
+        lazy: true,
+      },
+      {
+        name: "Fallback Override",
+        type: "fallback",
+        proxies: ["Relay B"],
+        url: "https://dialer.example/fallback",
+        interval: 90,
+      },
+      {
+        name: "Balance Override",
+        type: "load-balance",
+        proxies: ["Relay C"],
+        url: "https://dialer.example/balance",
+        interval: 150,
+        strategy: "round-robin",
+      },
+      {
+        name: "Fallback Defaulted",
+        type: "fallback",
+        proxies: ["Relay D"],
+        url: "https://probe.example.com/204",
+        interval: 300,
+      },
+      {
+        name: "Select Ignored",
+        type: "select",
+        proxies: ["Relay E"],
+      },
+    ]);
+  });
+
 });

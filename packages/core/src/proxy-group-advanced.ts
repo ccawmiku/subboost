@@ -166,6 +166,14 @@ function normalizeMemberList(value: unknown): ProxyGroupMemberRef[] {
   return out;
 }
 
+export function isHealthCheckProxyGroupType(groupType: ProxyGroupGroupType): boolean {
+  return groupType === "url-test" || groupType === "fallback" || groupType === "load-balance";
+}
+
+export function normalizeGroupTestInterval(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
 export function normalizeGroupTestUrl(value: unknown): string | undefined {
   if (typeof value !== "string" || !value.trim()) return undefined;
   try {
@@ -194,8 +202,10 @@ export function normalizeProxyGroupAdvancedConfig(value: unknown): ProxyGroupAdv
   const excludedMembers = normalizeMemberList(item.excludedMembers);
   const memberOrder = normalizeMemberList(item.memberOrder);
   const testUrl = normalizeGroupTestUrl(item.testUrl);
+  const testInterval = normalizeGroupTestInterval(item.testInterval);
   return {
     ...(testUrl ? { testUrl } : {}),
+    ...(testInterval !== undefined ? { testInterval } : {}),
     ...(sourceIds.length > 0 ? { sourceIds } : {}),
     ...(regions.length > 0 ? { regions } : {}),
     ...(includeRegex ? { includeRegex } : {}),

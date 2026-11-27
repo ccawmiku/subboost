@@ -4,6 +4,7 @@ import { ensureCustomRulesHaveIds } from "@subboost/core/rules/custom-rule-utils
 import { normalizePersistedRuleOrder } from "@subboost/core/generator/rules";
 import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
+import { normalizeGroupTestInterval } from "@subboost/core/proxy-group-advanced";
 import { resolveProxyGroupAdvancedModeEnabled } from "@subboost/core/proxy-group-advanced-mode";
 import type { ConfigActions, SubBoostTemplateConfig } from "../definitions";
 import type { GetState, SetAndGenerateConfig, SetState } from "../store-types";
@@ -170,8 +171,7 @@ export function createTemplateActions(
           allowLan: typeof config.allowLan === "boolean" ? config.allowLan : state.allowLan,
           testUrl: typeof config.testUrl === "string" ? config.testUrl : state.testUrl,
           sharedHealthChecks: config.sharedHealthChecks === true,
-          testInterval:
-            typeof config.testInterval === "number" ? config.testInterval : state.testInterval,
+          testInterval: normalizeGroupTestInterval(config.testInterval) ?? state.testInterval,
           ruleProviderBaseUrl:
             typeof config.ruleProviderBaseUrl === "string"
               ? config.ruleProviderBaseUrl

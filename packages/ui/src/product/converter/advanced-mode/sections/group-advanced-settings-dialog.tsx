@@ -22,7 +22,12 @@ import {
   type ProxyGroupGroupType,
 } from "@subboost/core/types/config";
 import { ProxyGroupTypeMenu } from "./proxy-group-type-menu";
-import { normalizeGroupTestUrl } from "@subboost/core/proxy-group-advanced";
+import { DEFAULT_SUBBOOST_CONFIG } from "@subboost/core/config/defaults";
+import {
+  isHealthCheckProxyGroupType,
+  normalizeGroupTestInterval,
+  normalizeGroupTestUrl,
+} from "@subboost/core/proxy-group-advanced";
 import { useUnappliedInputGuard } from "@subboost/ui/store/ui-store";
 import {
   validateGroupListenerPort,
@@ -31,6 +36,7 @@ import {
 
 export interface GroupAdvancedSettingsValue {
   testUrl?: string;
+  testInterval?: number;
   groupType: ProxyGroupGroupType;
   strategy?: LoadBalanceStrategy;
   listener: { port: number; enabled: boolean; allowLan: boolean } | null;
@@ -38,6 +44,7 @@ export interface GroupAdvancedSettingsValue {
 
 interface GroupAdvancedSettingsDialogProps {
   testUrl?: string;
+  testInterval?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   groupName: string;
@@ -60,6 +67,7 @@ export function GroupAdvancedSettingsDialog({
   groupType,
   strategy,
   testUrl,
+  testInterval,
   listenerTarget,
   listenerBinding,
   conflictState,
@@ -67,6 +75,10 @@ export function GroupAdvancedSettingsDialog({
 }: GroupAdvancedSettingsDialogProps) {
   // The draft is rebuilt on every open, so an open dialog may hold edits not yet applied.
   useUnappliedInputGuard(open);
+  const rawGlobalTestUrl = useConfigStore((state) => state.testUrl);
+  const rawGlobalInterval = useConfigStore((state) => state.testInterval);
+  const globalTestUrl = normalizeGroupTestUrl(rawGlobalTestUrl) ?? DEFAULT_SUBBOOST_CONFIG.testUrl;
+  const globalInterval = normalizeGroupTestInterval(rawGlobalInterval) ?? DEFAULT_SUBBOOST_CONFIG.testInterval;
   const [draftType, setDraftType] = React.useState<ProxyGroupGroupType>(groupType);
   const [draftStrategy, setDraftStrategy] = React.useState<LoadBalanceStrategy>(
     strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY
@@ -75,20 +87,20 @@ export function GroupAdvancedSettingsDialog({
   const [portInput, setPortInput] = React.useState("");
   const [allowLan, setAllowLan] = React.useState(false);
   const [draftTestUrl, setDraftTestUrl] = React.useState(testUrl ?? "");
-  const sharedHealthChecks = useConfigStore((state) => state.sharedHealthChecks);
-  const [draftSharedHealthChecks, setDraftSharedHealthChecks] = React.useState(sharedHealthChecks);
+  const [draftInterval, setDraftInterval] = React.useState(testInterval === undefined ? "" : String(testInterval));
+  const needsProbes = isHealthCheckProxyGroupType(draftType);
 
   // 每次打开时从当前配置重建草稿，丢弃上次未保存的修改
   React.useEffect(() => {
     if (!open) return;
     setDraftType(groupType);
     setDraftTestUrl(testUrl ?? "");
-    setDraftSharedHealthChecks(sharedHealthChecks);
+    setDraftInterval(testInterval === undefined ? "" : String(testInterval));
     setDraftStrategy(strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY);
     setListenerOn(Boolean(listenerBinding && listenerBinding.enabled !== false));
     setPortInput(listenerBinding ? String(listenerBinding.port) : "");
     setAllowLan(listenerBinding?.allowLan === true);
-  }, [open, groupType, strategy, testUrl, listenerBinding, sharedHealthChecks]);
+  }, [open, groupType, strategy, testUrl, testInterval, listenerBinding]);
 
   // 开关关闭=暂停（保留配置不生成），端口只需格式合法、无需无冲突（与生成器一致）
   const portCheck = React.useMemo(
@@ -98,21 +110,33 @@ export function GroupAdvancedSettingsDialog({
   // 仅当监听开启，或关闭但保留了端口值时才需要端口合法（允许清空端口来彻底移除配置）
   const portRequired = listenerOn || portInput.trim() !== "";
   const portError = portRequired ? portCheck.error : null;
-  const testUrlError = draftType === "url-test" && draftTestUrl.trim() && !normalizeGroupTestUrl(draftTestUrl)
-    ? "请输入有效的 HTTP/HTTPS 地址" : undefined;
-  const canSave = !portError && !testUrlError;
+  const trimmedTestUrl = draftTestUrl.trim();
+  const normalizedTestUrl = trimmedTestUrl ? normalizeGroupTestUrl(trimmedTestUrl) : undefined;
+  const testUrlError = needsProbes && trimmedTestUrl && !normalizedTestUrl
+    ? "请输入有效的 HTTP/HTTPS 地址"
+    : undefined;
+  const trimmedInterval = draftInterval.trim();
+  const parsedInterval = trimmedInterval === ""
+    ? undefined
+    : /^\d+$/.test(trimmedInterval)
+      ? normalizeGroupTestInterval(Number(trimmedInterval))
+      : undefined;
+  const intervalError = needsProbes && trimmedInterval !== "" && parsedInterval === undefined
+    ? "请输入大于 0 的整数秒数"
+    : undefined;
+  const canSave = !portError && !testUrlError && !intervalError;
 
   const handleSave = () => {
     if (!canSave) return;
     onSave({
       groupType: draftType,
-      testUrl: draftTestUrl.trim() || undefined,
+      testUrl: needsProbes ? normalizedTestUrl : normalizeGroupTestUrl(testUrl),
+      testInterval: needsProbes ? parsedInterval : normalizeGroupTestInterval(testInterval),
       ...(draftType === "load-balance" ? { strategy: draftStrategy } : {}),
       listener: portRequired && portCheck.port !== null
         ? { port: portCheck.port, enabled: listenerOn, allowLan }
         : null,
     });
-    if (draftType === "url-test") useConfigStore.getState().setSharedHealthChecks(draftSharedHealthChecks);
     onOpenChange(false);
   };
 
@@ -136,14 +160,51 @@ export function GroupAdvancedSettingsDialog({
             />
           </FormField>
 
-          {draftType === "url-test" && (
+          {needsProbes && (
             <div className="space-y-3 rounded-xl border border-ink/10 bg-ink/[0.025] p-3">
               <FormField label="测速地址" description="仅用于当前代理组；留空沿用默认测速地址。" error={testUrlError}>
-                <Input value={draftTestUrl} onChange={(event) => setDraftTestUrl(event.target.value)}
-                  placeholder="https://www.gstatic.com/generate_204" className="h-8 text-xs" />
+                <Input
+                  value={draftTestUrl}
+                  onChange={(event) => setDraftTestUrl(event.target.value)}
+                  placeholder={globalTestUrl}
+                  className="h-8 text-xs"
+                />
               </FormField>
-              <SwitchField label="共享健康检查" checked={draftSharedHealthChecks}
-                onCheckedChange={setDraftSharedHealthChecks} appearance="plain" density="compact" />
+              <FormField
+                label="检测间隔（秒）"
+                error={intervalError}
+                description={
+                  intervalError
+                    ? `留空沿用全局检测间隔（${globalInterval} 秒）；通过订阅集引入的节点按订阅集自身设置检测。`
+                    : parsedInterval !== undefined
+                      ? `当前生效：${parsedInterval} 秒（独立设置）；通过订阅集引入的节点按订阅集自身设置检测。`
+                      : `当前生效：${globalInterval} 秒（沿用全局）；通过订阅集引入的节点按订阅集自身设置检测。`
+                }
+              >
+                <Input
+                  value={draftInterval}
+                  onChange={(event) => setDraftInterval(event.target.value)}
+                  inputMode="numeric"
+                  placeholder={`沿用全局（${globalInterval} 秒）`}
+                  className="h-8 text-xs"
+                />
+              </FormField>
+              <div className="flex flex-wrap gap-1">
+                {[30, 60, 300, 600].map((seconds) => (
+                  <Button
+                    key={seconds}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDraftInterval(String(seconds))}
+                  >
+                    {`${seconds} 秒`}
+                  </Button>
+                ))}
+                <Button type="button" variant="ghost" size="sm" onClick={() => setDraftInterval("")}>
+                  沿用全局
+                </Button>
+              </div>
             </div>
           )}
 

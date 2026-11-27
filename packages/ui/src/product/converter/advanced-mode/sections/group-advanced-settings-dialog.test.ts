@@ -128,21 +128,51 @@ function renderDialog(overrides: Record<number, unknown> = {}, props: Record<str
 }
 
 describe("GroupAdvancedSettingsDialog", () => {
-  it("shares one saved switch value across automatic groups and cancels drafts", () => {
-    useConfigStore.setState({ sharedHealthChecks: false });
-    renderDialog({ 0: "url-test", 6: true });
-    const toggle = mocks.captures.switchFields.find((field) => field.label === "共享健康检查");
-    expect(toggle.checked).toBe(true);
-    expect(toggle.description).toBeUndefined();
-    mocks.captures.buttons.find((button) => button.children === "取消").onClick();
-    expect(useConfigStore.getState().sharedHealthChecks).toBe(false);
+  it("saves independent intervals across probe-capable group types without mutating global health settings", () => {
+    useConfigStore.setState({ sharedHealthChecks: false, testInterval: 300 });
+    const onSave = vi.fn();
+
+    renderDialog({ 0: "fallback", 6: "45" }, { onSave });
+    expect(mocks.captures.switchFields.some((field) => field.label.includes("共享健康检查"))).toBe(false);
+    expect(mocks.captures.buttons.some((button) => button.children === "30 秒")).toBe(true);
+    mocks.captures.buttons.find((button) => button.children === "30 秒").onClick();
+    expect(stateMock.setters[6]).toHaveBeenCalledWith("30");
     mocks.captures.buttons.find((button) => button.children === "保存").onClick();
-    expect(useConfigStore.getState().sharedHealthChecks).toBe(true);
-    renderDialog({ 0: "url-test" }, { groupName: "另一组" });
-    expect(mocks.captures.switchFields.find((field) => field.label === "共享健康检查").checked).toBe(true);
-    renderDialog({ 0: "select" });
-    expect(mocks.captures.switchFields.some((field) => field.label === "共享健康检查")).toBe(false);
-    useConfigStore.setState({ sharedHealthChecks: false });
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ groupType: "fallback", testInterval: 45 }));
+    expect(useConfigStore.getState().testInterval).toBe(300);
+    expect(useConfigStore.getState().sharedHealthChecks).toBe(false);
+
+    renderDialog({ 0: "url-test", 6: "" }, { onSave });
+    expect(mocks.captures.buttons.find((button) => button.children === "保存").disabled).toBe(false);
+    mocks.captures.buttons.find((button) => button.children === "沿用全局").onClick();
+    expect(stateMock.setters[6]).toHaveBeenCalledWith("");
+    mocks.captures.buttons.find((button) => button.children === "保存").onClick();
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ groupType: "url-test", testInterval: undefined }));
+
+    renderDialog({ 0: "load-balance", 6: "120" }, { onSave });
+    mocks.captures.buttons.find((button) => button.children === "保存").onClick();
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ groupType: "load-balance", testInterval: 120 }));
+
+    for (const input of ["0", "-1", "1.5", "abc", "9007199254740992"]) {
+      const { html } = renderDialog({ 0: "fallback", 6: input });
+      expect(mocks.captures.buttons.find((button) => button.children === "保存").disabled).toBe(true);
+      expect(html).not.toContain(`当前生效：${input}`);
+    }
+
+    // Switching back to select should discard hidden invalid probe drafts and preserve saved props.
+    renderDialog(
+      { 0: "select", 5: "ftp://invalid.example", 6: "abc" },
+      { testUrl: "https://local.subboost.test/204", testInterval: 90, onSave },
+    );
+    expect(mocks.captures.buttons.find((button) => button.children === "保存").disabled).toBe(false);
+    mocks.captures.buttons.find((button) => button.children === "保存").onClick();
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        groupType: "select",
+        testUrl: "https://local.subboost.test/204",
+        testInterval: 90,
+      }),
+    );
   });
   it("saves the group's test URL and rejects invalid input", () => {
     const onSave = vi.fn();

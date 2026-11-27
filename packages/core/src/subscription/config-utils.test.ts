@@ -578,4 +578,32 @@ describe("subscription config utils", () => {
     expect(buildGenerateOptionsFromConfig({}, { nodes: [node()] })).not.toHaveProperty("groupListeners");
   });
 
+  it("normalizes positive per-group testInterval and drops non-positive values", () => {
+    const options = buildGenerateOptionsFromConfig(
+      {
+        dialerProxyGroups: [
+          { id: "d1", name: "Valid Dialer", type: "fallback", relayNodes: ["R"], targetNodes: ["T"], testInterval: 90 },
+          { id: "d2", name: "Zero Dialer", type: "url-test", relayNodes: ["R"], targetNodes: ["T"], testInterval: 0 },
+          { id: "d3", name: "Float Dialer", type: "load-balance", relayNodes: ["R"], targetNodes: ["T"], testInterval: 1.5 },
+        ],
+        proxyGroupAdvanced: {
+          auto: { testInterval: 45 },
+          ai: { testInterval: -5 },
+        },
+        customProxyGroups: [
+          { id: "c1", name: "Custom", emoji: "", groupType: "fallback", advanced: { testInterval: 120 } },
+          { id: "c2", name: "BadCustom", emoji: "", groupType: "fallback", advanced: { testInterval: 0 } },
+        ],
+      },
+      { nodes: [node()] },
+    );
+
+    expect(options.dialerProxyGroups?.[0].testInterval).toBe(90);
+    expect(options.dialerProxyGroups?.[1]).not.toHaveProperty("testInterval");
+    expect(options.dialerProxyGroups?.[2]).not.toHaveProperty("testInterval");
+    expect(options.proxyGroupAdvanced).toEqual({ auto: { testInterval: 45 } });
+    expect(options.customProxyGroups?.[0].advanced).toEqual({ testInterval: 120 });
+    expect(options.customProxyGroups?.[1].advanced).toEqual({});
+  });
+
 });

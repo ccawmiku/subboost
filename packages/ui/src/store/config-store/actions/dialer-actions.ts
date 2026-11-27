@@ -1,3 +1,4 @@
+import { normalizeGroupTestInterval, normalizeGroupTestUrl } from "@subboost/core/proxy-group-advanced";
 import type { ConfigActions, DialerProxyGroup } from "../definitions";
 import type { GetState, SetAndGenerateConfig, SetState } from "../store-types";
 
@@ -47,9 +48,21 @@ export function createDialerActions(
 
     updateDialerProxyGroup: (id: string, group: Partial<DialerProxyGroup>) => {
       setAndGenerateConfig((state) => ({
-        dialerProxyGroups: state.dialerProxyGroups.map((g) =>
-          g.id === id ? { ...g, ...group } : g
-        ),
+        dialerProxyGroups: state.dialerProxyGroups.map((g) => {
+          if (g.id !== id) return g;
+          const next = { ...g, ...group };
+          if (Object.prototype.hasOwnProperty.call(group, "testUrl")) {
+            const normalizedUrl = normalizeGroupTestUrl(group.testUrl);
+            if (normalizedUrl !== undefined) next.testUrl = normalizedUrl;
+            else delete next.testUrl;
+          }
+          if (Object.prototype.hasOwnProperty.call(group, "testInterval")) {
+            const normalizedInterval = normalizeGroupTestInterval(group.testInterval);
+            if (normalizedInterval !== undefined) next.testInterval = normalizedInterval;
+            else delete next.testInterval;
+          }
+          return next;
+        }),
       }));
     },
 

@@ -614,12 +614,14 @@ export function ProxyGroupsCategories() {
             groupType={(advancedConfig.groupType ?? settingsModule.groupType) as ProxyGroupGroupType}
             strategy={advancedConfig.strategy}
             testUrl={advancedConfig.testUrl}
+            testInterval={advancedConfig.testInterval}
             listenerTarget={target}
             listenerBinding={findGroupListenerBinding(groupListeners, target)}
             conflictState={listenerConflictState}
-            onSave={({ groupType, strategy, listener, testUrl }) => {
+            onSave={({ groupType, strategy, listener, testUrl, testInterval }) => {
               updateProxyGroupAdvanced(settingsModule.id, {
                 testUrl,
+                testInterval,
                 groupType,
                 ...(groupType === "load-balance"
                   ? { strategy: strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY }
